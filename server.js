@@ -34,20 +34,20 @@
 
   // --- เชื่อมต่อ MySQL (PlanetScale ต้องมี SSL) ---
 const db = mysql.createConnection({
-  host: process.env.MYSQLHOST,
-  port: process.env.MYSQLPORT,
-  user: process.env.MYSQLUSER,
-  password: process.env.MYSQLPASSWORD,
-  database: process.env.MYSQLDATABASE,
-  ssl: { rejectUnauthorized: true } // ถ้า Railway ต้องใช้ SSL
+  host: process.env.DB_HOST,       // DB_HOST จาก Render
+  port: 3306,                      // Port ของ MySQL (ปกติ 3306)
+  user: process.env.DB_USERNAME,   // DB_USERNAME
+  password: process.env.DB_PASSWORD, // DB_PASSWORD
+  database: process.env.DB_DBNAME, // DB_DBNAME
+  ssl: { rejectUnauthorized: true } // ถ้า MySQL hosted ต้องใช้ SSL
 });
 
 
-  db.connect(err => {
-    if (err) return console.error("❌ Database connection failed:", err);
-    console.log(`✅ Connected to MySQL: ${process.env.MYSQLDATABASE}`);
-    ensureAdminExists();
-  });
+ db.connect(err => {
+  if (err) return console.error("❌ Database connection failed:", err);
+  console.log(`✅ Connected to MySQL: ${process.env.DB_DBNAME}`);
+  ensureAdminExists(); // สร้าง admin อัตโนมัติ
+});
 
   // --- สร้าง Admin อัตโนมัติ ---
   function ensureAdminExists() {
