@@ -17,7 +17,7 @@
   app.use(bodyParser.urlencoded({ extended: true }));
 
   const SECRET_KEY = process.env.SECRET_KEY;
-  const BASE_URL = process.env.BASE_URL;
+  const BASE_URL = process.env.BASE_URL || `http://localhost:${process.env.PORT || 3000}`;
 
   // --- สร้างโฟลเดอร์ uploads ถ้าไม่มี ---
   if (!fs.existsSync("uploads")) fs.mkdirSync("uploads");
@@ -188,5 +188,7 @@ const db = mysql.createConnection({
   });
 
   // --- Start server ---
-  const PORT = process.env.PORT || 3000;
-  app.listen(PORT, () => console.log(`✅ gameshop-api running at ${BASE_URL}`));
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`✅ gameshop-api running at ${BASE_URL}`);
+});
