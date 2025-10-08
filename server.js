@@ -39,7 +39,7 @@ const db = mysql.createConnection({
   user: process.env.DB_USERNAME,   // DB_USERNAME
   password: process.env.DB_PASSWORD, // DB_PASSWORD
   database: process.env.DB_DBNAME, // DB_DBNAME
-  ssl: { rejectUnauthorized: true } // ถ้า MySQL hosted ต้องใช้ SSL
+  ssl: { rejectUnauthorized: false  } // ถ้า MySQL hosted ต้องใช้ SSL
 });
 
 
