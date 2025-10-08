@@ -186,6 +186,11 @@ const db = mysql.createConnection({
       }
     );
   });
+  
+app.get('/', (req, res) => {
+  res.send('🎮 Gameshop API is running! Visit /api/* for endpoints.');
+});
+  
 
   // --- Start server ---
 const PORT = process.env.PORT || 3000;
