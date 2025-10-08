@@ -1,202 +1,206 @@
-  require('dotenv').config();
+require('dotenv').config();
 
+const express = require("express");
+const mysql = require("mysql2");
+const bcrypt = require("bcryptjs");
+const jwt = require("jsonwebtoken");
+const bodyParser = require("body-parser");
+const cors = require("cors");
+const multer = require("multer");
+const path = require("path");
+const fs = require("fs");
 
-  const express = require("express");
-  const mysql = require("mysql2");
-  const bcrypt = require("bcryptjs");
-  const jwt = require("jsonwebtoken");
-  const bodyParser = require("body-parser");
-  const cors = require("cors");
-  const multer = require("multer");
-  const path = require("path");
-  const fs = require("fs");
+const app = express();
 
-  const app = express();
-  app.use(cors());
-  app.use(bodyParser.json());
-  app.use(bodyParser.urlencoded({ extended: true }));
+// --- CORS สำหรับ frontend dev ---
+app.use(cors({
+  origin: 'http://localhost:4200', // หรือ '*' สำหรับทุก origin
+  credentials: true
+}));
 
-  const SECRET_KEY = process.env.SECRET_KEY;
-  const BASE_URL = process.env.BASE_URL || `http://localhost:${process.env.PORT || 3000}`;
+app.use(bodyParser.json());
+app.use(bodyParser.urlencoded({ extended: true }));
 
-  // --- สร้างโฟลเดอร์ uploads ถ้าไม่มี ---
-  if (!fs.existsSync("uploads")) fs.mkdirSync("uploads");
+const SECRET_KEY = process.env.SECRET_KEY;
+const BASE_URL = process.env.BASE_URL || `http://localhost:${process.env.PORT || 3000}`;
 
-  // --- static middleware สำหรับเข้าถึงไฟล์รูป ---
-  app.use("/uploads", express.static("uploads"));
+// --- สร้างโฟลเดอร์ uploads ถ้าไม่มี ---
+if (!fs.existsSync("uploads")) fs.mkdirSync("uploads");
 
-  // --- Multer สำหรับอัปโหลดรูป ---
-  const storage = multer.diskStorage({
-    destination: (req, file, cb) => cb(null, "uploads/"),
-    filename: (req, file, cb) => cb(null, `${Date.now()}${path.extname(file.originalname)}`)
-  });
-  const upload = multer({ storage });
+// --- static middleware สำหรับเข้าถึงไฟล์รูป ---
+app.use("/uploads", express.static("uploads"));
 
-  // --- เชื่อมต่อ MySQL (PlanetScale ต้องมี SSL) ---
-const db = mysql.createConnection({
-  host: process.env.DB_HOST,       // DB_HOST จาก Render
-  port: 3306,                      // Port ของ MySQL (ปกติ 3306)
-  user: process.env.DB_USERNAME,   // DB_USERNAME
-  password: process.env.DB_PASSWORD, // DB_PASSWORD
-  database: process.env.DB_DBNAME, // DB_DBNAME// ถ้า MySQL hosted ต้องใช้ SSL
-   waitForConnections: true,
+// --- Multer สำหรับอัปโหลดรูป ---
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, "uploads/"),
+  filename: (req, file, cb) => cb(null, `${Date.now()}${path.extname(file.originalname)}`)
+});
+const upload = multer({ storage });
+
+// --- MySQL Connection Pool ---
+const pool = mysql.createPool({
+  host: process.env.DB_HOST,
+  port: 3306,
+  user: process.env.DB_USERNAME,
+  password: process.env.DB_PASSWORD,
+  database: process.env.DB_DBNAME,
+  waitForConnections: true,
   connectionLimit: 10,
   queueLimit: 0,
   ssl: { rejectUnauthorized: false }
 });
 
-
- db.connect(err => {
-  if (err) return console.error("❌ Database connection failed:", err);
-  console.log(`✅ Connected to MySQL: ${process.env.DB_DBNAME}`);
-  ensureAdminExists(); // สร้าง admin อัตโนมัติ
+// --- Helper: query with promise ---
+const query = (sql, params) => new Promise((resolve, reject) => {
+  pool.query(sql, params, (err, results) => {
+    if (err) reject(err);
+    else resolve(results);
+  });
 });
 
-  // --- สร้าง Admin อัตโนมัติ ---
-  function ensureAdminExists() {
-    const adminEmail = "admin@gameshop.com";
-    const adminUsername = "admin";
-    const adminPassword = "123";
+// --- สร้าง Admin อัตโนมัติ ---
+async function ensureAdminExists() {
+  const adminEmail = "admin@gameshop.com";
+  const adminUsername = "admin";
+  const adminPassword = "123";
 
-    db.query("SELECT * FROM users WHERE email = ?", [adminEmail], (err, results) => {
-      if (err) return console.error("Error checking for admin user:", err);
+  try {
+    const results = await query("SELECT * FROM users WHERE email = ?", [adminEmail]);
+    if (results.length === 0) {
+      console.log("Admin user not found, creating one...");
+      const hashedPassword = bcrypt.hashSync(adminPassword, 10);
 
-      if (results.length === 0) {
-        console.log("Admin user not found, creating one...");
-        const hashedPassword = bcrypt.hashSync(adminPassword, 10);
-
-        const newAdmin = {
-          username: adminUsername,
-          email: adminEmail,
-          password: hashedPassword,
-          profile_image: null,
-          wallet_balance: 999999.99,
-          role: "admin"
-        };
-
-        db.query("INSERT INTO users SET ?", newAdmin, (err) => {
-          if (err) console.error("Failed to create admin user:", err);
-          else console.log(`✅ Admin user '${adminUsername}' created successfully.`);
-        });
-      } else {
-        console.log("Admin user already exists.");
-      }
-    });
-  }
-
-  // --- Register ---
-  app.post("/api/register", upload.single("profile_image"), (req, res) => {
-    const { username, email, password } = req.body;
-    if (!username || !email || !password) 
-      return res.status(400).json({ error: "Please fill all fields" });
-
-    db.query("SELECT * FROM users WHERE email = ?", [email], (err, results) => {
-      if (err) return res.status(500).json({ error: err.message });
-      if (results.length > 0) return res.status(400).json({ error: "Email already exists" });
-
-      let profileImagePath = null;
-      if (req.file) profileImagePath = `${BASE_URL}/uploads/${req.file.filename}`;
-
-      const hashedPassword = bcrypt.hashSync(password, 10);
-
-      db.query(
-        "INSERT INTO users (username, email, password, role, profile_image) VALUES (?, ?, ?, 'user', ?)",
-        [username, email, hashedPassword, profileImagePath],
-        (err) => {
-          if (err) return res.status(500).json({ error: err.message });
-          res.json({ message: "Registration successful" });
-        }
-      );
-    });
-  });
-
-  // --- Login ---
-  app.post("/api/login", (req, res) => {
-    const { email, password } = req.body;
-
-    db.query("SELECT * FROM users WHERE email = ?", [email], (err, results) => {
-      if (err) return res.status(500).json({ error: err.message });
-      if (results.length === 0) return res.status(404).json({ error: "User not found" });
-
-      const user = results[0];
-      if (!bcrypt.compareSync(password, user.password)) 
-        return res.status(401).json({ error: "Incorrect password" });
-
-      const token = jwt.sign(
-        { id: user.id, username: user.username, role: user.role },
-        SECRET_KEY,
-        { expiresIn: "1h" }
+      await query(
+        "INSERT INTO users (username, email, password, profile_image, wallet_balance, role) VALUES (?, ?, ?, ?, ?, ?)",
+        [adminUsername, adminEmail, hashedPassword, null, 999999.99, 'admin']
       );
 
-      const userPayload = {
-        id: user.id,
-        username: user.username,
-        email: user.email,
-        profile_image: user.profile_image,
-        wallet_balance: user.wallet_balance,
-        role: user.role
-      };
-
-      res.json({ message: "Login successful", token, user: userPayload });
-    });
-  });
-
-  // --- Middleware ตรวจสอบ JWT ---
-  function authenticateToken(req, res, next) {
-    const authHeader = req.headers['authorization'];
-    const token = authHeader && authHeader.split(' ')[1];
-    if (!token) return res.sendStatus(401);
-
-    jwt.verify(token, SECRET_KEY, (err, user) => {
-      if (err) return res.sendStatus(403);
-      req.user = user;
-      next();
-    });
+      console.log(`✅ Admin user '${adminUsername}' created successfully.`);
+    } else {
+      console.log("Admin user already exists.");
+    }
+  } catch (err) {
+    console.error("Error ensuring admin exists:", err);
   }
+}
 
-  // --- Profile routes ---
-  app.get("/api/profile", authenticateToken, (req, res) => {
-    db.query(
+// --- Register ---
+app.post("/api/register", upload.single("profile_image"), async (req, res) => {
+  const { username, email, password } = req.body;
+  if (!username || !email || !password) 
+    return res.status(400).json({ error: "Please fill all fields" });
+
+  try {
+    const existing = await query("SELECT * FROM users WHERE email = ?", [email]);
+    if (existing.length > 0) return res.status(400).json({ error: "Email already exists" });
+
+    let profileImagePath = null;
+    if (req.file) profileImagePath = `${BASE_URL}/uploads/${req.file.filename}`;
+
+    const hashedPassword = bcrypt.hashSync(password, 10);
+
+    await query(
+      "INSERT INTO users (username, email, password, role, profile_image) VALUES (?, ?, ?, 'user', ?)",
+      [username, email, hashedPassword, profileImagePath]
+    );
+
+    res.json({ message: "Registration successful" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// --- Login ---
+app.post("/api/login", async (req, res) => {
+  const { email, password } = req.body;
+
+  try {
+    const users = await query("SELECT * FROM users WHERE email = ?", [email]);
+    if (users.length === 0) return res.status(404).json({ error: "User not found" });
+
+    const user = users[0];
+    if (!bcrypt.compareSync(password, user.password)) 
+      return res.status(401).json({ error: "Incorrect password" });
+
+    const token = jwt.sign(
+      { id: user.id, username: user.username, role: user.role },
+      SECRET_KEY,
+      { expiresIn: "1h" }
+    );
+
+    const userPayload = {
+      id: user.id,
+      username: user.username,
+      email: user.email,
+      profile_image: user.profile_image,
+      wallet_balance: user.wallet_balance,
+      role: user.role
+    };
+
+    res.json({ message: "Login successful", token, user: userPayload });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// --- JWT Middleware ---
+function authenticateToken(req, res, next) {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+  if (!token) return res.sendStatus(401);
+
+  jwt.verify(token, SECRET_KEY, (err, user) => {
+    if (err) return res.sendStatus(403);
+    req.user = user;
+    next();
+  });
+}
+
+// --- Profile routes ---
+app.get("/api/profile", authenticateToken, async (req, res) => {
+  try {
+    const results = await query(
       "SELECT id, username, email, profile_image, wallet_balance, role FROM users WHERE id = ?",
-      [req.user.id],
-      (err, results) => {
-        if (err) return res.status(500).json({ error: err.message });
-        if (results.length === 0) return res.status(404).json({ error: "User not found" });
-        res.json({ message: "Protected data", user: results[0] });
-      }
+      [req.user.id]
     );
-  });
+    if (results.length === 0) return res.status(404).json({ error: "User not found" });
+    res.json({ message: "Protected data", user: results[0] });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
-  app.put('/api/profile', authenticateToken, upload.single('profile_image'), (req, res) => {
-    const { username, email } = req.body;
-    let profile_image = null;
-    if (req.file) profile_image = `${BASE_URL}/uploads/${req.file.filename}`;
+app.put('/api/profile', authenticateToken, upload.single('profile_image'), async (req, res) => {
+  const { username, email } = req.body;
+  let profile_image = null;
+  if (req.file) profile_image = `${BASE_URL}/uploads/${req.file.filename}`;
 
-    db.query(
+  try {
+    await query(
       'UPDATE users SET username = ?, email = ?, profile_image = COALESCE(?, profile_image) WHERE id = ?',
-      [username, email, profile_image, req.user.id],
-      (err) => {
-        if (err) return res.status(500).json({ error: err.message });
-
-        db.query(
-          'SELECT id, username, email, profile_image, wallet_balance, role FROM users WHERE id = ?',
-          [req.user.id],
-          (err2, results) => {
-            if (err2) return res.status(500).json({ error: err2.message });
-            res.json({ message: 'Profile updated', user: results[0] });
-          }
-        );
-      }
+      [username, email, profile_image, req.user.id]
     );
-  });
+
+    const results = await query(
+      'SELECT id, username, email, profile_image, wallet_balance, role FROM users WHERE id = ?',
+      [req.user.id]
+    );
+
+    res.json({ message: 'Profile updated', user: results[0] });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
 app.get('/', (req, res) => {
   res.send('🎮 Gameshop API is running!2035');
 });
-  
 
-  // --- Start server ---
+// --- Start server ---
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
+app.listen(PORT, async () => {
   console.log(`✅ gameshop-api running at ${BASE_URL}`);
+  await ensureAdminExists();
 });
