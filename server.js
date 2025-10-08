@@ -38,8 +38,11 @@ const db = mysql.createConnection({
   port: 3306,                      // Port ของ MySQL (ปกติ 3306)
   user: process.env.DB_USERNAME,   // DB_USERNAME
   password: process.env.DB_PASSWORD, // DB_PASSWORD
-  database: process.env.DB_DBNAME, // DB_DBNAME
-  ssl: { rejectUnauthorized: false  } // ถ้า MySQL hosted ต้องใช้ SSL
+  database: process.env.DB_DBNAME, // DB_DBNAME// ถ้า MySQL hosted ต้องใช้ SSL
+   waitForConnections: true,
+  connectionLimit: 10,
+  queueLimit: 0,
+  ssl: { rejectUnauthorized: false }
 });
 
 
@@ -186,9 +189,9 @@ const db = mysql.createConnection({
       }
     );
   });
-  
+
 app.get('/', (req, res) => {
-  res.send('🎮 Gameshop API is running! Visit /api/* for endpoints.');
+  res.send('🎮 Gameshop API is running!2035');
 });
   
 
