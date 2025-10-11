@@ -1,4 +1,5 @@
-require('dotenv').config();
+require('dotenv').config(); // ต้องอยู่บนสุด
+const cloudinary = require('cloudinary').v2;
 
 const express = require("express");
 const mysql = require("mysql2");
