@@ -23,7 +23,7 @@ app.use(bodyParser.urlencoded({ extended: true }));
 
 const SECRET_KEY = process.env.SECRET_KEY;
 const PORT = process.env.PORT || 3000;
-const BASE_URL = process.env.BASE_URL || `https://gameshop-api-1.onrender.com`;
+const BASE_URL = process.env.BASE_URL || `http://localhost:${PORT}`;
 
 // --- สร้างโฟลเดอร์ uploads/games และ uploads/profile ---
 ['uploads/games', 'uploads/profile'].forEach(dir => {
