@@ -340,8 +340,9 @@ app.post('/api/purchase/:gameId', authenticateToken, async (req, res) => {
 
 // ดึงประวัติ
 app.get('/api/profile/transactions', authenticateToken, async (req, res) => {
+  console.log('User in request:', req.user); 
   try {
-    console.log('User in request:', req.user);
+
 
     const transactions = await query(`
       SELECT 
