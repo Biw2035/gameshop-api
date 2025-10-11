@@ -174,6 +174,35 @@ app.put("/api/profile", authenticateToken, uploadProfile.single('profile_image')
   }
 });
 
+// --- Top-up Wallet ---
+app.post("/api/wallet/topup", authenticateToken, async (req, res) => {
+  const { amount } = req.body;
+  const topUpAmount = parseFloat(amount);
+
+  if (!topUpAmount || topUpAmount <= 0) {
+    return res.status(400).json({ error: "จำนวนเงินต้องมากกว่า 0" });
+  }
+
+  try {
+    // อัพเดต wallet_balance
+    await query(
+      "UPDATE users SET wallet_balance = wallet_balance + ? WHERE id = ?",
+      [topUpAmount, req.user.id]
+    );
+
+    // ดึงข้อมูล user ใหม่
+    const updatedUser = await query(
+      "SELECT id, username, email, profile_image, wallet_balance, role FROM users WHERE id = ?",
+      [req.user.id]
+    );
+
+    res.json({ message: "เติมเงินสำเร็จ", user: updatedUser[0] });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+
 // --- GET all games ---
 app.get("/api/games", async (req, res) => {
   try {
