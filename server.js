@@ -6,9 +6,10 @@ const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const bodyParser = require("body-parser");
 const cors = require("cors");
+
 const multer = require("multer");
-const path = require("path");
-const fs = require("fs");
+const { CloudinaryStorage } = require('multer-storage-cloudinary');
+const cloudinary = require('cloudinary').v2;
 
 const app = express();
 
@@ -17,22 +18,38 @@ app.use(cors({
   origin: 'http://localhost:4200',
   credentials: true
 }));
-
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
 const SECRET_KEY = process.env.SECRET_KEY;
 const PORT = process.env.PORT || 3000;
-const BASE_URL = process.env.BASE_URL || `http://localhost:${PORT}`;
 
-// --- สร้างโฟลเดอร์ uploads/games และ uploads/profile ---
-['uploads/games', 'uploads/profile'].forEach(dir => {
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+// --- Cloudinary Config ---
+cloudinary.config({
+  cloud_name: process.env.CLOUD_NAME,
+  api_key: process.env.CLOUD_API_KEY,
+  api_secret: process.env.CLOUD_API_SECRET
 });
 
-// --- Static middleware ---
-app.use('/uploads/games', express.static(path.join(__dirname, 'uploads/games')));
-app.use('/uploads/profile', express.static(path.join(__dirname, 'uploads/profile')));
+// --- Multer Storage สำหรับเกม ---
+const gameStorage = new CloudinaryStorage({
+  cloudinary,
+  params: {
+    folder: 'gameshop/games',
+    allowed_formats: ['jpg','jpeg','png']
+  }
+});
+const uploadGame = multer({ storage: gameStorage });
+
+// --- Multer Storage สำหรับโปรไฟล์ ---
+const profileStorage = new CloudinaryStorage({
+  cloudinary,
+  params: {
+    folder: 'gameshop/profile',
+    allowed_formats: ['jpg','jpeg','png']
+  }
+});
+const uploadProfile = multer({ storage: profileStorage });
 
 // --- MySQL Connection Pool ---
 const pool = mysql.createPool({
@@ -47,27 +64,11 @@ const pool = mysql.createPool({
   ssl: { rejectUnauthorized: false }
 });
 
-// --- Helper: query with promise ---
 const query = (sql, params) => new Promise((resolve, reject) => {
   pool.query(sql, params, (err, results) => {
-    if (err) reject(err);
+    if(err) reject(err);
     else resolve(results);
   });
-});
-
-// --- Multer Storage ---
-const uploadGame = multer({
-  storage: multer.diskStorage({
-    destination: (req, file, cb) => cb(null, 'uploads/games'),
-    filename: (req, file, cb) => cb(null, Date.now() + path.extname(file.originalname))
-  })
-});
-
-const uploadProfile = multer({
-  storage: multer.diskStorage({
-    destination: (req, file, cb) => cb(null, 'uploads/profile'),
-    filename: (req, file, cb) => cb(null, Date.now() + path.extname(file.originalname))
-  })
 });
 
 // --- JWT Middleware ---
@@ -77,7 +78,7 @@ function authenticateToken(req, res, next) {
   if (!token) return res.sendStatus(401);
 
   jwt.verify(token, SECRET_KEY, (err, user) => {
-    if (err) return res.sendStatus(403);
+    if(err) return res.sendStatus(403);
     req.user = user;
     next();
   });
@@ -113,7 +114,7 @@ app.post("/api/register", uploadProfile.single("profile_image"), async (req, res
     const existing = await query("SELECT * FROM users WHERE email = ?", [email]);
     if (existing.length > 0) return res.status(400).json({ error: "Email already exists" });
 
-    const profileImagePath = req.file ? `${BASE_URL}/uploads/profile/${req.file.filename}` : null;
+    const profileImagePath = req.file ? req.file.path : null; // Cloudinary URL
     const hashedPassword = bcrypt.hashSync(password, 10);
 
     await query(
@@ -158,7 +159,7 @@ app.get("/api/profile", authenticateToken, async (req, res) => {
 // --- Profile UPDATE ---
 app.put("/api/profile", authenticateToken, uploadProfile.single('profile_image'), async (req, res) => {
   const { username, email } = req.body;
-  const profile_image = req.file ? `${BASE_URL}/uploads/profile/${req.file.filename}` : null;
+  const profile_image = req.file ? req.file.path : null; // Cloudinary URL
 
   try {
     await query(
@@ -187,7 +188,7 @@ app.post("/api/games", authenticateToken, uploadGame.single('image'), async (req
   const { title, description, price, category } = req.body;
   if (!title || !description || !price || !category) return res.status(400).json({ error: 'กรุณากรอกข้อมูลให้ครบ' });
 
-  const imagePath = req.file ? `${BASE_URL}/uploads/games/${req.file.filename}` : null;
+  const imagePath = req.file ? req.file.path : null; // Cloudinary URL
   try {
     const result = await query(
       'INSERT INTO games (title, description, price, category, image) VALUES (?, ?, ?, ?, ?)',
@@ -204,6 +205,6 @@ app.get('/', (req, res) => res.send('🎮 Gameshop API is running!'));
 
 // --- Start server ---
 app.listen(PORT, async () => {
-  console.log(`✅ Server running at ${BASE_URL}`);
+  console.log(`✅ Server running at port ${PORT}`);
   await ensureAdminExists();
 });
