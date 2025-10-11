@@ -339,15 +339,21 @@ app.post('/api/purchase/:gameId', authenticateToken, async (req, res) => {
 });
 
 // ดึงประวัติ
-app.get('/api/transactions', authenticateToken, async (req, res) => {
+
+app.get('/api/profile/transactions', authenticateToken, async (req, res) => {
   try {
     const transactions = await query(
-      'SELECT t.*, g.name as game_name FROM transactions t LEFT JOIN games g ON t.game_id = g.id WHERE t.user_id = ? ORDER BY t.created_at DESC',
+      `SELECT t.id, t.type, t.amount, t.game_id, t.created_at, g.name AS game_name
+       FROM transactions t
+       LEFT JOIN games g ON t.game_id = g.id
+       WHERE t.user_id = ?
+       ORDER BY t.created_at DESC`,
       [req.user.id]
     );
 
     res.json({ transactions });
   } catch (err) {
+    console.error('Failed to get transactions:', err);
     res.status(500).json({ error: err.message });
   }
 });
