@@ -190,13 +190,23 @@ app.put('/api/profile/topup', authenticateToken, async (req, res) => {
     // อัปเดต wallet_balance
     await query('UPDATE users SET wallet_balance = ? WHERE id = ?', [newBalance, req.user.id]);
 
-    const updatedUser = await query('SELECT id, username, email, role, wallet_balance, profile_image FROM users WHERE id = ?', [req.user.id]);
+    // ✅ บันทึก transaction
+    await query(
+      'INSERT INTO transactions(user_id, type, amount) VALUES (?, "topup", ?)',
+      [req.user.id, topUp]
+    );
+
+    const updatedUser = await query(
+      'SELECT id, username, email, role, wallet_balance, profile_image FROM users WHERE id = ?',
+      [req.user.id]
+    );
 
     res.json({ user: updatedUser[0] });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
+
 
 // --- GET all games ---
 app.get("/api/games", async (req, res) => {
@@ -243,7 +253,7 @@ app.delete("/api/games/:id", authenticateToken, async (req, res) => {
 });
 
 
-// --- Update Game with optional image ---
+// ---edit game ---
 app.put("/api/games/:id", authenticateToken, uploadGame.single('image'), async (req, res) => {
   const gameId = req.params.id;
   const { title, description, price, category } = req.body;
@@ -274,6 +284,69 @@ app.get("/api/games/:id", async (req, res) => {
     const games = await query("SELECT * FROM games WHERE id = ?", [gameId]);
     if (games.length === 0) return res.status(404).json({ error: "Game not found" });
     res.json(games[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+
+// ซื้อเกม
+app.post('/api/purchase/:gameId', authenticateToken, async (req, res) => {
+  const gameId = req.params.gameId;
+
+  try {
+    // 1. ดึง user
+    const users = await query('SELECT * FROM users WHERE id = ?', [req.user.id]);
+    if (users.length === 0) return res.status(404).json({ error: 'User not found' });
+
+    const user = users[0];
+    const walletBalance = parseFloat(user.wallet_balance);
+
+    // 2. ดึงราคาของเกม
+    const games = await query('SELECT * FROM games WHERE id = ?', [gameId]);
+    if (games.length === 0) return res.status(404).json({ error: 'Game not found' });
+
+    const game = games[0];
+    const price = parseFloat(game.price);
+
+    // 3. เช็คเงินพอหรือไม่
+    if (walletBalance < price) return res.status(400).json({ error: 'ยอดเงินไม่พอซื้อเกม' });
+
+    const newBalance = walletBalance - price;
+
+    // 4. อัปเดต wallet_balance
+    await query('UPDATE users SET wallet_balance = ? WHERE id = ?', [newBalance, req.user.id]);
+
+    // 5. เพิ่ม transaction
+    await query(
+      'INSERT INTO transactions(user_id, type, amount, game_id) VALUES (?, "purchase", ?, ?)',
+      [req.user.id, price, gameId]
+    );
+
+    // 6. (ตัวเลือก) เพิ่ม record ownership ของเกมในตาราง user_games
+    await query('INSERT INTO user_games(user_id, game_id) VALUES (?, ?)', [req.user.id, gameId]);
+
+    // 7. ส่งข้อมูลกลับ
+    const updatedUser = await query(
+      'SELECT id, username, email, role, wallet_balance, profile_image FROM users WHERE id = ?',
+      [req.user.id]
+    );
+
+    res.json({ user: updatedUser[0], gamePurchased: game });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ดึงประวัติ
+app.get('/api/transactions', authenticateToken, async (req, res) => {
+  try {
+    const transactions = await query(
+      'SELECT t.*, g.name as game_name FROM transactions t LEFT JOIN games g ON t.game_id = g.id WHERE t.user_id = ? ORDER BY t.created_at DESC',
+      [req.user.id]
+    );
+
+    res.json({ transactions });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
