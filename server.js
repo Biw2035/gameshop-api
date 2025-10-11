@@ -175,30 +175,24 @@ app.put("/api/profile", authenticateToken, uploadProfile.single('profile_image')
 });
 
 // เติมเงิน
-app.put("/api/profile", authenticateToken, async (req, res) => {
-  const { username, email, topUp } = req.body;
+app.put('/api/profile/topup', authenticateToken, async (req, res) => {
+  const { topUp } = req.body;
+  if (!topUp || topUp <= 0) return res.status(400).json({ error: 'จำนวนเงินไม่ถูกต้อง' });
 
   try {
-    // เติมเงิน
-    if (topUp && !isNaN(topUp)) {
-      await query(
-        "UPDATE users SET wallet_balance = wallet_balance + ? WHERE id = ?",
-        [parseFloat(topUp), req.user.id]
-      );
-    }
+    // ดึง user ปัจจุบัน
+    const users = await query('SELECT * FROM users WHERE id = ?', [req.user.id]);
+    if (users.length === 0) return res.status(404).json({ error: 'User not found' });
 
-    // อัปเดต username/email
-    await query(
-      "UPDATE users SET username = ?, email = ? WHERE id = ?",
-      [username, email, req.user.id]
-    );
+    const currentBalance = parseFloat(users[0].wallet_balance) || 0;
+    const newBalance = currentBalance + parseFloat(topUp);
 
-    const updated = await query(
-      "SELECT id, username, email, profile_image, wallet_balance, role FROM users WHERE id = ?",
-      [req.user.id]
-    );
-    res.json({ user: updated[0] });
+    // อัปเดต wallet_balance
+    await query('UPDATE users SET wallet_balance = ? WHERE id = ?', [newBalance, req.user.id]);
 
+    const updatedUser = await query('SELECT id, username, email, role, wallet_balance, profile_image FROM users WHERE id = ?', [req.user.id]);
+
+    res.json({ user: updatedUser[0] });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
