@@ -174,29 +174,21 @@ app.put("/api/profile", authenticateToken, uploadProfile.single('profile_image')
   }
 });
 
-// --- Top-up Wallet ---
-app.post("/api/wallet/topup", authenticateToken, async (req, res) => {
-  const { amount } = req.body;
-  const topUpAmount = parseFloat(amount);
-
-  if (!topUpAmount || topUpAmount <= 0) {
-    return res.status(400).json({ error: "จำนวนเงินต้องมากกว่า 0" });
-  }
-
+// เติมเงิน
+app.put("/api/profile", authenticateToken, async (req, res) => {
+  const { username, email, topUp } = req.body;
   try {
-    // อัพเดต wallet_balance
+    if (topUp && !isNaN(topUp)) {
+      await query('UPDATE users SET wallet_balance = wallet_balance + ? WHERE id = ?', [topUp, req.user.id]);
+    }
+
     await query(
-      "UPDATE users SET wallet_balance = wallet_balance + ? WHERE id = ?",
-      [topUpAmount, req.user.id]
+      'UPDATE users SET username = ?, email = ? WHERE id = ?',
+      [username, email, req.user.id]
     );
 
-    // ดึงข้อมูล user ใหม่
-    const updatedUser = await query(
-      "SELECT id, username, email, profile_image, wallet_balance, role FROM users WHERE id = ?",
-      [req.user.id]
-    );
-
-    res.json({ message: "เติมเงินสำเร็จ", user: updatedUser[0] });
+    const updated = await query('SELECT id, username, email, profile_image, wallet_balance, role FROM users WHERE id = ?', [req.user.id]);
+    res.json({ user: updated[0] });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
