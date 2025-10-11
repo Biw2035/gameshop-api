@@ -194,6 +194,34 @@ app.put('/api/profile', authenticateToken, upload.single('profile_image'), async
   }
 });
 
+
+// --- เพิ่มเกม (เฉพาะ admin) ---
+app.post('/api/games', authenticateToken, upload.single('image'), async (req, res) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Forbidden' });
+
+  const { title, description, price, category } = req.body;
+  if (!title || !description || !price || !category)
+    return res.status(400).json({ error: 'กรุณากรอกข้อมูลให้ครบ' });
+
+  let imagePath = null;
+  if (req.file) imagePath = `${BASE_URL}/uploads/${req.file.filename}`;
+
+  try {
+    const result = await query(
+      'INSERT INTO games (title, description, price, category, image) VALUES (?, ?, ?, ?, ?)',
+      [title, description, price, category, imagePath]
+    );
+    res.json({ message: 'Game added successfully', gameId: result.insertId });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+
+
+
+
 app.get('/', (req, res) => {
   res.send('🎮 Gameshop API is running!2035');
 });
