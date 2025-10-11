@@ -111,6 +111,33 @@ app.post("/api/register", upload.single("profile_image"), async (req, res) => {
   }
 });
 
+// Upload เกม
+const gameStorage = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, 'uploads/games/'),
+  filename: (req, file, cb) => cb(null, Date.now() + path.extname(file.originalname))
+});
+const uploadGame = multer({ storage: gameStorage });
+
+// Upload โปรไฟล์
+const profileStorage = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, 'uploads/profile/'),
+  filename: (req, file, cb) => cb(null, Date.now() + path.extname(file.originalname))
+});
+const uploadProfile = multer({ storage: profileStorage });
+
+
+
+
+// สร้างโฟลเดอร์แยก
+['uploads/games', 'uploads/profile'].forEach(dir => {
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+});
+
+// Static routes
+app.use('/uploads/games', express.static(path.join(__dirname, 'uploads/games')));
+app.use('/uploads/profile', express.static(path.join(__dirname, 'uploads/profile')));
+
+
 // --- Login ---
 app.post("/api/login", async (req, res) => {
   const { email, password } = req.body;
