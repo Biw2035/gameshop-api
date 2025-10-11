@@ -341,11 +341,7 @@ app.post('/api/purchase/:gameId', authenticateToken, async (req, res) => {
 // ดึงประวัติ
 app.get('/api/profile/transactions', authenticateToken, async (req, res) => {
   try {
-    console.log('Authenticated user:', req.user); // debug
-
-    if (!req.user || !req.user.id) {
-      return res.status(400).json({ error: 'User ID missing in token' });
-    }
+    console.log('User in request:', req.user);
 
     const transactions = await query(`
       SELECT 
@@ -361,7 +357,7 @@ app.get('/api/profile/transactions', authenticateToken, async (req, res) => {
       ORDER BY t.created_at DESC
     `, [req.user.id]);
 
-    res.json({ transactions });
+    res.json({ transactions: transactions || [] });
   } catch (err) {
     console.error('Failed to get transactions:', err);
     res.status(500).json({ error: err.message });
