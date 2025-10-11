@@ -177,23 +177,32 @@ app.put("/api/profile", authenticateToken, uploadProfile.single('profile_image')
 // เติมเงิน
 app.put("/api/profile", authenticateToken, async (req, res) => {
   const { username, email, topUp } = req.body;
+
   try {
+    // เติมเงิน
     if (topUp && !isNaN(topUp)) {
-      await query('UPDATE users SET wallet_balance = wallet_balance + ? WHERE id = ?', [topUp, req.user.id]);
+      await query(
+        "UPDATE users SET wallet_balance = wallet_balance + ? WHERE id = ?",
+        [parseFloat(topUp), req.user.id]
+      );
     }
 
+    // อัปเดต username/email
     await query(
-      'UPDATE users SET username = ?, email = ? WHERE id = ?',
+      "UPDATE users SET username = ?, email = ? WHERE id = ?",
       [username, email, req.user.id]
     );
 
-    const updated = await query('SELECT id, username, email, profile_image, wallet_balance, role FROM users WHERE id = ?', [req.user.id]);
+    const updated = await query(
+      "SELECT id, username, email, profile_image, wallet_balance, role FROM users WHERE id = ?",
+      [req.user.id]
+    );
     res.json({ user: updated[0] });
+
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
-
 
 // --- GET all games ---
 app.get("/api/games", async (req, res) => {
