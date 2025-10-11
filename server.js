@@ -171,11 +171,10 @@ app.get("/api/profile", authenticateToken, async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
-
-app.put('/api/profile', authenticateToken, upload.single('profile_image'), async (req, res) => {
+//อัปโหลด/แก้ไขโปรไฟล์:
+app.put('/api/profile', authenticateToken, uploadProfile.single('profile_image'), async (req, res) => {
   const { username, email } = req.body;
-  let profile_image = null;
-  if (req.file) profile_image = `${BASE_URL}/uploads/${req.file.filename}`;
+  const profile_image = req.file ? `${BASE_URL}/uploads/profile/${req.file.filename}` : null;
 
   try {
     await query(
@@ -194,7 +193,6 @@ app.put('/api/profile', authenticateToken, upload.single('profile_image'), async
   }
 });
 
-
 // --- GET all games ---
 app.get('/api/games', async (req, res) => {
   try {
@@ -207,14 +205,13 @@ app.get('/api/games', async (req, res) => {
 });
 
 
-// --- เพิ่มเกม (ไม่ตรวจสอบ role) ---
-app.post('/api/games', authenticateToken, upload.single('image'), async (req, res) => {
+// --- เพิ่มเกม ---
+app.post('/api/games', authenticateToken, uploadGame.single('image'), async (req, res) => {
   const { title, description, price, category } = req.body;
   if (!title || !description || !price || !category)
     return res.status(400).json({ error: 'กรุณากรอกข้อมูลให้ครบ' });
 
-  let imagePath = null;
-  if (req.file) imagePath = `${BASE_URL}/uploads/games/${req.file.filename}`;
+  const imagePath = req.file ? `${BASE_URL}/uploads/games/${req.file.filename}` : null;
 
   try {
     const result = await query(
@@ -227,6 +224,7 @@ app.post('/api/games', authenticateToken, upload.single('image'), async (req, re
     res.status(500).json({ error: err.message });
   }
 });
+
 
 
 
