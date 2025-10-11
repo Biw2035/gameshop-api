@@ -12,9 +12,9 @@ const fs = require("fs");
 
 const app = express();
 
-// --- CORS สำหรับ frontend dev ---
+// --- CORS ---
 app.use(cors({
-  origin: 'http://localhost:4200', // หรือ '*' สำหรับทุก origin
+  origin: 'http://localhost:4200',
   credentials: true
 }));
 
@@ -22,20 +22,17 @@ app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
 const SECRET_KEY = process.env.SECRET_KEY;
-const BASE_URL = process.env.BASE_URL || `http://localhost:${process.env.PORT || 3000}`;
+const PORT = process.env.PORT || 3000;
+const BASE_URL = process.env.BASE_URL || `http://localhost:${PORT}`;
 
-// --- สร้างโฟลเดอร์ uploads ถ้าไม่มี ---
-if (!fs.existsSync("uploads")) fs.mkdirSync("uploads");
-
-// --- static middleware สำหรับเข้าถึงไฟล์รูป ---
-app.use("/uploads", express.static("uploads"));
-
-// --- Multer สำหรับอัปโหลดรูป ---
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, "uploads/"),
-  filename: (req, file, cb) => cb(null, `${Date.now()}${path.extname(file.originalname)}`)
+// --- สร้างโฟลเดอร์ uploads/games และ uploads/profile ---
+['uploads/games', 'uploads/profile'].forEach(dir => {
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 });
-const upload = multer({ storage });
+
+// --- Static middleware ---
+app.use('/uploads/games', express.static(path.join(__dirname, 'uploads/games')));
+app.use('/uploads/profile', express.static(path.join(__dirname, 'uploads/profile')));
 
 // --- MySQL Connection Pool ---
 const pool = mysql.createPool({
@@ -58,118 +55,19 @@ const query = (sql, params) => new Promise((resolve, reject) => {
   });
 });
 
-// --- สร้าง Admin อัตโนมัติ ---
-async function ensureAdminExists() {
-  const adminEmail = "admin@gameshop.com";
-  const adminUsername = "admin";
-  const adminPassword = "123";
-
-  try {
-    const results = await query("SELECT * FROM users WHERE email = ?", [adminEmail]);
-    if (results.length === 0) {
-      console.log("Admin user not found, creating one...");
-      const hashedPassword = bcrypt.hashSync(adminPassword, 10);
-
-      await query(
-        "INSERT INTO users (username, email, password, profile_image, wallet_balance, role) VALUES (?, ?, ?, ?, ?, ?)",
-        [adminUsername, adminEmail, hashedPassword, null, 999999.99, 'admin']
-      );
-
-      console.log(`✅ Admin user '${adminUsername}' created successfully.`);
-    } else {
-      console.log("Admin user already exists.");
-    }
-  } catch (err) {
-    console.error("Error ensuring admin exists:", err);
-  }
-}
-
-// --- Register ---
-app.post("/api/register", upload.single("profile_image"), async (req, res) => {
-  const { username, email, password } = req.body;
-  if (!username || !email || !password) 
-    return res.status(400).json({ error: "Please fill all fields" });
-
-  try {
-    const existing = await query("SELECT * FROM users WHERE email = ?", [email]);
-    if (existing.length > 0) return res.status(400).json({ error: "Email already exists" });
-
-    let profileImagePath = null;
-    if (req.file) profileImagePath = `${BASE_URL}/uploads/${req.file.filename}`;
-
-    const hashedPassword = bcrypt.hashSync(password, 10);
-
-    await query(
-      "INSERT INTO users (username, email, password, role, profile_image) VALUES (?, ?, ?, 'user', ?)",
-      [username, email, hashedPassword, profileImagePath]
-    );
-
-    res.json({ message: "Registration successful" });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: err.message });
-  }
+// --- Multer Storage ---
+const uploadGame = multer({
+  storage: multer.diskStorage({
+    destination: (req, file, cb) => cb(null, 'uploads/games'),
+    filename: (req, file, cb) => cb(null, Date.now() + path.extname(file.originalname))
+  })
 });
 
-// Upload เกม
-const gameStorage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, 'uploads/games/'),
-  filename: (req, file, cb) => cb(null, Date.now() + path.extname(file.originalname))
-});
-const uploadGame = multer({ storage: gameStorage });
-
-// Upload โปรไฟล์
-const profileStorage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, 'uploads/profile/'),
-  filename: (req, file, cb) => cb(null, Date.now() + path.extname(file.originalname))
-});
-const uploadProfile = multer({ storage: profileStorage });
-
-
-
-
-// สร้างโฟลเดอร์แยก
-['uploads/games', 'uploads/profile'].forEach(dir => {
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-});
-
-// Static routes
-app.use('/uploads/games', express.static(path.join(__dirname, 'uploads/games')));
-app.use('/uploads/profile', express.static(path.join(__dirname, 'uploads/profile')));
-
-
-// --- Login ---
-app.post("/api/login", async (req, res) => {
-  const { email, password } = req.body;
-
-  try {
-    const users = await query("SELECT * FROM users WHERE email = ?", [email]);
-    if (users.length === 0) return res.status(404).json({ error: "User not found" });
-
-    const user = users[0];
-    if (!bcrypt.compareSync(password, user.password)) 
-      return res.status(401).json({ error: "Incorrect password" });
-
-    const token = jwt.sign(
-      { id: user.id, username: user.username, role: user.role },
-      SECRET_KEY,
-      { expiresIn: "1h" }
-    );
-
-    const userPayload = {
-      id: user.id,
-      username: user.username,
-      email: user.email,
-      profile_image: user.profile_image,
-      wallet_balance: user.wallet_balance,
-      role: user.role
-    };
-
-    res.json({ message: "Login successful", token, user: userPayload });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: err.message });
-  }
+const uploadProfile = multer({
+  storage: multer.diskStorage({
+    destination: (req, file, cb) => cb(null, 'uploads/profile'),
+    filename: (req, file, cb) => cb(null, Date.now() + path.extname(file.originalname))
+  })
 });
 
 // --- JWT Middleware ---
@@ -185,21 +83,80 @@ function authenticateToken(req, res, next) {
   });
 }
 
-// --- Profile routes ---
-app.get("/api/profile", authenticateToken, async (req, res) => {
+// --- Ensure Admin Exists ---
+async function ensureAdminExists() {
+  const adminEmail = "admin@gameshop.com";
+  const adminUsername = "admin";
+  const adminPassword = "123";
+
   try {
-    const results = await query(
-      "SELECT id, username, email, profile_image, wallet_balance, role FROM users WHERE id = ?",
-      [req.user.id]
+    const results = await query("SELECT * FROM users WHERE email = ?", [adminEmail]);
+    if (results.length === 0) {
+      const hashedPassword = bcrypt.hashSync(adminPassword, 10);
+      await query(
+        "INSERT INTO users (username, email, password, profile_image, wallet_balance, role) VALUES (?, ?, ?, ?, ?, ?)",
+        [adminUsername, adminEmail, hashedPassword, null, 999999.99, 'admin']
+      );
+      console.log(`✅ Admin created: ${adminUsername}`);
+    }
+  } catch (err) {
+    console.error(err);
+  }
+}
+
+// --- Register ---
+app.post("/api/register", uploadProfile.single("profile_image"), async (req, res) => {
+  const { username, email, password } = req.body;
+  if (!username || !email || !password) return res.status(400).json({ error: "Please fill all fields" });
+
+  try {
+    const existing = await query("SELECT * FROM users WHERE email = ?", [email]);
+    if (existing.length > 0) return res.status(400).json({ error: "Email already exists" });
+
+    const profileImagePath = req.file ? `${BASE_URL}/uploads/profile/${req.file.filename}` : null;
+    const hashedPassword = bcrypt.hashSync(password, 10);
+
+    await query(
+      "INSERT INTO users (username, email, password, role, profile_image) VALUES (?, ?, ?, 'user', ?)",
+      [username, email, hashedPassword, profileImagePath]
     );
-    if (results.length === 0) return res.status(404).json({ error: "User not found" });
-    res.json({ message: "Protected data", user: results[0] });
+
+    res.json({ message: "Registration successful" });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
-//อัปโหลด/แก้ไขโปรไฟล์:
-app.put('/api/profile', authenticateToken, uploadProfile.single('profile_image'), async (req, res) => {
+
+// --- Login ---
+app.post("/api/login", async (req, res) => {
+  const { email, password } = req.body;
+  try {
+    const users = await query("SELECT * FROM users WHERE email = ?", [email]);
+    if (users.length === 0) return res.status(404).json({ error: "User not found" });
+
+    const user = users[0];
+    if (!bcrypt.compareSync(password, user.password)) return res.status(401).json({ error: "Incorrect password" });
+
+    const token = jwt.sign({ id: user.id, username: user.username, role: user.role }, SECRET_KEY, { expiresIn: "1h" });
+    res.json({ message: "Login successful", token, user });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// --- Profile GET ---
+app.get("/api/profile", authenticateToken, async (req, res) => {
+  try {
+    const results = await query("SELECT id, username, email, profile_image, wallet_balance, role FROM users WHERE id = ?", [req.user.id]);
+    if (results.length === 0) return res.status(404).json({ error: "User not found" });
+    res.json({ user: results[0] });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// --- Profile UPDATE ---
+app.put("/api/profile", authenticateToken, uploadProfile.single('profile_image'), async (req, res) => {
   const { username, email } = req.body;
   const profile_image = req.file ? `${BASE_URL}/uploads/profile/${req.file.filename}` : null;
 
@@ -208,38 +165,29 @@ app.put('/api/profile', authenticateToken, uploadProfile.single('profile_image')
       'UPDATE users SET username = ?, email = ?, profile_image = COALESCE(?, profile_image) WHERE id = ?',
       [username, email, profile_image, req.user.id]
     );
-
-    const results = await query(
-      'SELECT id, username, email, profile_image, wallet_balance, role FROM users WHERE id = ?',
-      [req.user.id]
-    );
-
-    res.json({ message: 'Profile updated', user: results[0] });
+    const updated = await query('SELECT id, username, email, profile_image, wallet_balance, role FROM users WHERE id = ?', [req.user.id]);
+    res.json({ message: 'Profile updated', user: updated[0] });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
 // --- GET all games ---
-app.get('/api/games', async (req, res) => {
+app.get("/api/games", async (req, res) => {
   try {
-    const games = await query('SELECT * FROM games ORDER BY id DESC');
+    const games = await query("SELECT * FROM games ORDER BY id DESC");
     res.json(games);
   } catch (err) {
-    console.error(err);
     res.status(500).json({ error: err.message });
   }
 });
 
-
-// --- เพิ่มเกม ---
-app.post('/api/games', authenticateToken, uploadGame.single('image'), async (req, res) => {
+// --- Add Game ---
+app.post("/api/games", authenticateToken, uploadGame.single('image'), async (req, res) => {
   const { title, description, price, category } = req.body;
-  if (!title || !description || !price || !category)
-    return res.status(400).json({ error: 'กรุณากรอกข้อมูลให้ครบ' });
+  if (!title || !description || !price || !category) return res.status(400).json({ error: 'กรุณากรอกข้อมูลให้ครบ' });
 
   const imagePath = req.file ? `${BASE_URL}/uploads/games/${req.file.filename}` : null;
-
   try {
     const result = await query(
       'INSERT INTO games (title, description, price, category, image) VALUES (?, ?, ?, ?, ?)',
@@ -247,22 +195,15 @@ app.post('/api/games', authenticateToken, uploadGame.single('image'), async (req
     );
     res.json({ message: 'Game added successfully', gameId: result.insertId });
   } catch (err) {
-    console.error(err);
     res.status(500).json({ error: err.message });
   }
 });
 
-
-
-
-
-app.get('/', (req, res) => {
-  res.send('🎮 Gameshop API is running!2035');
-});
+// --- Root ---
+app.get('/', (req, res) => res.send('🎮 Gameshop API is running!'));
 
 // --- Start server ---
-const PORT = process.env.PORT || 3000;
 app.listen(PORT, async () => {
-  console.log(`✅ gameshop-api running at ${BASE_URL}`);
+  console.log(`✅ Server running at ${BASE_URL}`);
   await ensureAdminExists();
 });
