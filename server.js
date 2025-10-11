@@ -207,13 +207,8 @@ app.get('/api/games', async (req, res) => {
 });
 
 
-// --- เพิ่มเกม (เฉพาะ admin) ---
+// --- เพิ่มเกม (ไม่ตรวจสอบ role) ---
 app.post('/api/games', authenticateToken, upload.single('image'), async (req, res) => {
-  // ตรวจสอบ role
-  if (req.user.role !== 'admin') {
-    return res.status(403).json({ error: 'Forbidden: Only admin can add games' });
-  }
-
   const { title, description, price, category } = req.body;
   if (!title || !description || !price || !category)
     return res.status(400).json({ error: 'กรุณากรอกข้อมูลให้ครบ' });
@@ -232,6 +227,7 @@ app.post('/api/games', authenticateToken, upload.single('image'), async (req, re
     res.status(500).json({ error: err.message });
   }
 });
+
 
 
 
