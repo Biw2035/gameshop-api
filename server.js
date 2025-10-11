@@ -201,6 +201,45 @@ app.post("/api/games", authenticateToken, uploadGame.single('image'), async (req
   }
 });
 
+// --- Delete Game ---
+app.delete("/api/games/:id", authenticateToken, async (req, res) => {
+  const gameId = req.params.id;
+
+  try {
+    // ตรวจสอบว่าเกมมีอยู่หรือไม่
+    const games = await query("SELECT * FROM games WHERE id = ?", [gameId]);
+    if (games.length === 0) return res.status(404).json({ error: "Game not found" });
+
+    // ลบเกม
+    await query("DELETE FROM games WHERE id = ?", [gameId]);
+    res.json({ message: "Game deleted successfully" });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+
+// --- Update Game ---
+app.put("/api/games/:id", authenticateToken, async (req, res) => {
+  const gameId = req.params.id;
+  const { title, description, price, category } = req.body;
+
+  try {
+    const games = await query("SELECT * FROM games WHERE id = ?", [gameId]);
+    if (games.length === 0) return res.status(404).json({ error: "Game not found" });
+
+    await query(
+      "UPDATE games SET title = ?, description = ?, price = ?, category = ? WHERE id = ?",
+      [title, description, price, category, gameId]
+    );
+    res.json({ message: "Game updated successfully" });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+
+
 // --- Root ---
 app.get('/', (req, res) => res.send('🎮 Gameshop API is running!'));
 
