@@ -195,6 +195,18 @@ app.put('/api/profile', authenticateToken, upload.single('profile_image'), async
 });
 
 
+// --- GET all games ---
+app.get('/api/games', async (req, res) => {
+  try {
+    const games = await query('SELECT * FROM games ORDER BY id DESC');
+    res.json(games);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+
 // --- เพิ่มเกม (เฉพาะ admin) ---
 app.post('/api/games', authenticateToken, upload.single('image'), async (req, res) => {
   if (req.user.role !== 'admin') return res.status(403).json({ error: 'Forbidden' });
