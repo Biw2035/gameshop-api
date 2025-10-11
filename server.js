@@ -219,24 +219,29 @@ app.delete("/api/games/:id", authenticateToken, async (req, res) => {
 });
 
 
-// --- Update Game ---
-app.put("/api/games/:id", authenticateToken, async (req, res) => {
+// --- Update Game with optional image ---
+app.put("/api/games/:id", authenticateToken, uploadGame.single('image'), async (req, res) => {
   const gameId = req.params.id;
   const { title, description, price, category } = req.body;
+  const imagePath = req.file ? req.file.path : null; // Cloudinary URL
 
   try {
     const games = await query("SELECT * FROM games WHERE id = ?", [gameId]);
     if (games.length === 0) return res.status(404).json({ error: "Game not found" });
 
     await query(
-      "UPDATE games SET title = ?, description = ?, price = ?, category = ? WHERE id = ?",
-      [title, description, price, category, gameId]
+      `UPDATE games 
+       SET title = ?, description = ?, price = ?, category = ?, image = COALESCE(?, image) 
+       WHERE id = ?`,
+      [title, description, price, category, imagePath, gameId]
     );
+
     res.json({ message: "Game updated successfully" });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
+
 
 
 
