@@ -216,7 +216,7 @@ app.post('/api/games', authenticateToken, upload.single('image'), async (req, re
     return res.status(400).json({ error: 'กรุณากรอกข้อมูลให้ครบ' });
 
   let imagePath = null;
-  if (req.file) imagePath = `/uploads/games/${req.file.filename}`;
+  if (req.file) imagePath = `${BASE_URL}/uploads/games/${req.file.filename}`;
 
   try {
     const result = await query(
@@ -229,7 +229,6 @@ app.post('/api/games', authenticateToken, upload.single('image'), async (req, re
     res.status(500).json({ error: err.message });
   }
 });
-
 
 
 
