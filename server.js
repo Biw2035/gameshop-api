@@ -351,7 +351,7 @@ app.get('/api/profile/transactions', authenticateToken, async (req, res) => {
         t.amount,
         t.game_id,
         t.created_at,
-        g.name AS game_name
+        g.title AS game_name
       FROM transactions t
       LEFT JOIN games g ON t.game_id = g.id
       WHERE t.user_id = ?
