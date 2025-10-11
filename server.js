@@ -243,6 +243,17 @@ app.put("/api/games/:id", authenticateToken, uploadGame.single('image'), async (
 });
 
 
+// --- GET game by ID  เรียกมาตอนหน้าedit---
+app.get("/api/games/:id", async (req, res) => {
+  const gameId = req.params.id;
+  try {
+    const games = await query("SELECT * FROM games WHERE id = ?", [gameId]);
+    if (games.length === 0) return res.status(404).json({ error: "Game not found" });
+    res.json(games[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
 
 // --- Root ---
