@@ -291,52 +291,48 @@ app.get("/api/games/:id", async (req, res) => {
 
 
 // ซื้อเกม
-app.post('/api/purchase/:gameId', authenticateToken, async (req, res) => {
-  const gameId = req.params.gameId;
+app.post('/api/checkout', authenticateToken, async (req, res) => {
+  const cartItems = req.body.cartItems; // เกมทั้งหมด [{id, price}, ...]
+  const userId = req.user.id;
 
   try {
-    // 1. ดึง user
-    const users = await query('SELECT * FROM users WHERE id = ?', [req.user.id]);
+    // 1. ดึงข้อมูล user
+    const users = await query('SELECT * FROM users WHERE id = ?', [userId]);
     if (users.length === 0) return res.status(404).json({ error: 'User not found' });
 
     const user = users[0];
-    const walletBalance = parseFloat(user.wallet_balance);
+    let walletBalance = parseFloat(user.wallet_balance);
 
-    // 2. ดึงราคาของเกม
-    const games = await query('SELECT * FROM games WHERE id = ?', [gameId]);
-    if (games.length === 0) return res.status(404).json({ error: 'Game not found' });
+    // 2. คำนวณยอดรวม
+    const totalPrice = cartItems.reduce((sum, g) => sum + parseFloat(g.price), 0);
 
-    const game = games[0];
-    const price = parseFloat(game.price);
+    if (walletBalance < totalPrice) {
+      return res.status(400).json({ error: 'ยอดเงินใน Wallet ไม่พอ' });
+    }
 
-    // 3. เช็คเงินพอหรือไม่
-    if (walletBalance < price) return res.status(400).json({ error: 'ยอดเงินไม่พอซื้อเกม' });
+    // 3. หักเงิน
+    walletBalance -= totalPrice;
+    await query('UPDATE users SET wallet_balance = ? WHERE id = ?', [walletBalance, userId]);
 
-    const newBalance = walletBalance - price;
+    // 4. บันทึกเกมทุกเกมที่ซื้อ
+    for (const game of cartItems) {
+      // ป้องกันซื้อซ้ำ
+      await query('INSERT IGNORE INTO user_games(user_id, game_id) VALUES (?, ?)', [userId, game.id]);
 
-    // 4. อัปเดต wallet_balance
-    await query('UPDATE users SET wallet_balance = ? WHERE id = ?', [newBalance, req.user.id]);
+      // Transaction แยกเป็นแต่ละเกม
+      await query(
+        'INSERT INTO transactions(user_id, type, amount, game_id) VALUES (?, "purchase", ?, ?)',
+        [userId, game.price, game.id]
+      );
+    }
 
-    // 5. เพิ่ม transaction
-    await query(
-      'INSERT INTO transactions(user_id, type, amount, game_id) VALUES (?, "purchase", ?, ?)',
-      [req.user.id, price, gameId]
-    );
-
-    // 6. (ตัวเลือก) เพิ่ม record ownership ของเกมในตาราง user_games
-    await query('INSERT INTO user_games(user_id, game_id) VALUES (?, ?)', [req.user.id, gameId]);
-
-    // 7. ส่งข้อมูลกลับ
-    const updatedUser = await query(
-      'SELECT id, username, email, role, wallet_balance, profile_image FROM users WHERE id = ?',
-      [req.user.id]
-    );
-
-    res.json({ user: updatedUser[0], gamePurchased: game });
+    res.json({ message: 'ซื้อเกมทั้งหมดสำเร็จ', walletBalance });
   } catch (err) {
+    console.error(err);
     res.status(500).json({ error: err.message });
   }
 });
+
 
 // ดึงประวัติ
 app.get('/api/profile/transactions', authenticateToken, async (req, res) => {
