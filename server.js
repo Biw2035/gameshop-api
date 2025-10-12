@@ -293,37 +293,50 @@ app.get("/api/games/:id", async (req, res) => {
 // ซื้อเกม
 app.post('/api/checkout', authenticateToken, async (req, res) => {
   const cartItems = req.body.cartItems;
+  const discountCode = req.body.discountCode || null; // รับโค้ดลดราคา
   const userId = req.user.id;
 
   try {
+    // 1. ดึงข้อมูล user
     const users = await query('SELECT * FROM users WHERE id = ?', [userId]);
     if (users.length === 0) return res.status(404).json({ error: 'User not found' });
-
     const user = users[0];
     let walletBalance = parseFloat(user.wallet_balance);
 
-    const totalPrice = cartItems.reduce((sum, g) => sum + parseFloat(g.price), 0);
+    // 2. คำนวณยอดรวม
+    let totalPrice = cartItems.reduce((sum, g) => sum + parseFloat(g.price), 0);
+
+    // 3. ตรวจสอบโค้ดลดราคา
+    if (discountCode) {
+      const codes = await query('SELECT * FROM codes WHERE code = ? AND type = "discount"', [discountCode]);
+      if (codes.length === 0) return res.status(400).json({ error: 'โค้ดไม่ถูกต้อง' });
+
+      const code = codes[0];
+      totalPrice -= parseFloat(code.value);
+      if (totalPrice < 0) totalPrice = 0;
+    }
+
+    // 4. ตรวจสอบยอดเงินเพียงพอ
     if (walletBalance < totalPrice) return res.status(400).json({ error: 'ยอดเงินไม่พอ' });
 
-    // หักเงิน
+    // 5. หักเงิน
     walletBalance -= totalPrice;
     await query('UPDATE users SET wallet_balance = ? WHERE id = ?', [walletBalance, userId]);
 
-    // บันทึกเกมและ transactions
+    // 6. บันทึกเกมและ transactions
     for (const game of cartItems) {
       await query('INSERT IGNORE INTO user_games(user_id, game_id) VALUES (?, ?)', [userId, game.id]);
       await query('INSERT INTO transactions(user_id, type, amount, game_id) VALUES (?, "purchase", ?, ?)',
                   [userId, game.price, game.id]);
     }
 
-    // ดึงข้อมูล user ใหม่หลังอัปเดต
+    // 7. ดึงข้อมูล user ใหม่
     const updatedUserRows = await query(
       'SELECT id, username, email, role, wallet_balance, profile_image FROM users WHERE id = ?',
       [userId]
     );
     const updatedUser = updatedUserRows[0];
 
-    // ส่งกลับ wallet balance + user object ล่าสุด
     res.json({ message: 'ซื้อเกมทั้งหมดสำเร็จ', walletBalance, updatedUser });
   } catch (err) {
     console.error(err);
@@ -417,6 +430,48 @@ app.get('/api/admin/users', authenticateToken, isAdmin, async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+
+
+// ================== GET ALL CODES ==================
+app.get('/api/admin/codes', authenticateToken, async (req, res) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Access denied' });
+  try {
+    const codes = await query('SELECT * FROM codes ORDER BY id DESC');
+    res.json({ codes });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ================== CREATE NEW CODE ==================
+app.post('/api/admin/codes', authenticateToken, async (req, res) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Access denied' });
+
+  const { code, type, value } = req.body;
+
+  try {
+    await query('INSERT INTO codes (code, type, value) VALUES (?, ?, ?)', 
+      [code, type, value]);
+    res.json({ message: 'สร้างโค้ดสำเร็จ' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ================== DELETE CODE ==================
+app.delete('/api/admin/codes/:id', authenticateToken, async (req, res) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Access denied' });
+
+  try {
+    await query('DELETE FROM codes WHERE id = ?', [req.params.id]);
+    res.json({ message: 'ลบโค้ดเรียบร้อย' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+
+
 
 // --- Root ---
 app.get('/', (req, res) => res.send('🎮 Gameshop API is running!'));
