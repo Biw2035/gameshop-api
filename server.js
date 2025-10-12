@@ -292,46 +292,45 @@ app.get("/api/games/:id", async (req, res) => {
 
 // ซื้อเกม
 app.post('/api/checkout', authenticateToken, async (req, res) => {
-  const cartItems = req.body.cartItems; // เกมทั้งหมด [{id, price}, ...]
+  const cartItems = req.body.cartItems;
   const userId = req.user.id;
 
   try {
-    // 1. ดึงข้อมูล user
     const users = await query('SELECT * FROM users WHERE id = ?', [userId]);
     if (users.length === 0) return res.status(404).json({ error: 'User not found' });
 
     const user = users[0];
     let walletBalance = parseFloat(user.wallet_balance);
 
-    // 2. คำนวณยอดรวม
     const totalPrice = cartItems.reduce((sum, g) => sum + parseFloat(g.price), 0);
+    if (walletBalance < totalPrice) return res.status(400).json({ error: 'ยอดเงินไม่พอ' });
 
-    if (walletBalance < totalPrice) {
-      return res.status(400).json({ error: 'ยอดเงินใน Wallet ไม่พอ' });
-    }
-
-    // 3. หักเงิน
+    // หักเงิน
     walletBalance -= totalPrice;
     await query('UPDATE users SET wallet_balance = ? WHERE id = ?', [walletBalance, userId]);
 
-    // 4. บันทึกเกมทุกเกมที่ซื้อ
+    // บันทึกเกมและ transactions
     for (const game of cartItems) {
-      // ป้องกันซื้อซ้ำ
       await query('INSERT IGNORE INTO user_games(user_id, game_id) VALUES (?, ?)', [userId, game.id]);
-
-      // Transaction แยกเป็นแต่ละเกม
-      await query(
-        'INSERT INTO transactions(user_id, type, amount, game_id) VALUES (?, "purchase", ?, ?)',
-        [userId, game.price, game.id]
-      );
+      await query('INSERT INTO transactions(user_id, type, amount, game_id) VALUES (?, "purchase", ?, ?)',
+                  [userId, game.price, game.id]);
     }
 
-    res.json({ message: 'ซื้อเกมทั้งหมดสำเร็จ', walletBalance });
+    // ดึงข้อมูล user ใหม่หลังอัปเดต
+    const updatedUserRows = await query(
+      'SELECT id, username, email, role, wallet_balance, profile_image FROM users WHERE id = ?',
+      [userId]
+    );
+    const updatedUser = updatedUserRows[0];
+
+    // ส่งกลับ wallet balance + user object ล่าสุด
+    res.json({ message: 'ซื้อเกมทั้งหมดสำเร็จ', walletBalance, updatedUser });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: err.message });
   }
 });
+
 
 
 // ดึงประวัติ
