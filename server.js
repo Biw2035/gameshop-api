@@ -382,6 +382,42 @@ app.get('/api/mygames', authenticateToken, async (req, res) => {
 });
 
 
+function isAdmin(req, res, next) {
+  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Access denied' });
+  next();
+}
+
+// ดึง transaction ของ user
+app.get('/api/admin/user/:userId/transactions', authenticateToken, isAdmin, async (req, res) => {
+  const userId = req.params.userId;
+
+  try {
+    const transactions = await query(`
+      SELECT t.id, t.type, t.amount, t.game_id, g.title AS game_name, t.created_at
+      FROM transactions t
+      LEFT JOIN games g ON t.game_id = g.id
+      WHERE t.user_id = ?
+      ORDER BY t.created_at DESC
+    `, [userId]);
+
+    res.json({ transactions });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ดึงรายการผู้ใช้ทั้งหมด (สำหรับ dropdown เลือก)
+app.get('/api/admin/users', authenticateToken, isAdmin, async (req, res) => {
+  try {
+    const users = await query('SELECT id, username, email, wallet_balance FROM users ORDER BY username ASC');
+    res.json({ users });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // --- Root ---
 app.get('/', (req, res) => res.send('🎮 Gameshop API is running!'));
 
