@@ -470,7 +470,25 @@ app.delete('/api/admin/codes/:id', authenticateToken, async (req, res) => {
   }
 });
 
+// ================== GET DISCOUNT CODE ==================
+app.get('/api/codes/:code', async (req, res) => {
+  const code = req.params.code;
 
+  try {
+    const rows = await query(
+      'SELECT * FROM codes WHERE code = ? AND type = "discount"',
+      [code]
+    );
+
+    if (rows.length === 0) {
+      return res.status(404).json({ error: 'โค้ดไม่ถูกต้อง' });
+    }
+
+    res.json(rows[0]); // ส่งกลับ object ของโค้ด
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
 
 // --- Root ---
