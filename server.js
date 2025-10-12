@@ -362,6 +362,26 @@ app.get('/api/profile/transactions', authenticateToken, async (req, res) => {
 });
 
 
+// ดึงเกมทั้งหมดของผู้ใช้
+app.get('/api/mygames', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    const games = await query(`
+      SELECT g.* 
+      FROM games g
+      INNER JOIN user_games ug ON g.id = ug.game_id
+      WHERE ug.user_id = ?
+      ORDER BY g.id DESC
+    `, [userId]);
+
+    res.json({ games });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 
 // --- Root ---
 app.get('/', (req, res) => res.send('🎮 Gameshop API is running!'));
