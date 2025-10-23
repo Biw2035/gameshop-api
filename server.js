@@ -21,14 +21,12 @@ app.use(bodyParser.urlencoded({ extended: true }));
 const { Router } = require('express');
 const router = Router();
 
-const angularDistPath = path.join(__dirname, 'dist/gameshop/browser');
-
 // Serve Angular build
-app.use(express.static(angularDistPath));
+app.use(express.static(path.join(__dirname, 'dist', 'gameshop')));
 
-// Catch-all สำหรับ Angular routing
-app.get(/.*/, (req, res) => {
-  res.sendFile(path.join(angularDistPath, 'index.html'));
+// Catch-all route สำหรับ Angular routing
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, 'dist', 'gameshop', 'index.html'));
 });
 app.use(router);
 // --- Example: simple API route ---
