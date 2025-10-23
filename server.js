@@ -14,6 +14,15 @@ const { CloudinaryStorage } = require('multer-storage-cloudinary');
 
 const app = express();
 
+// Serve Angular static files
+app.use(express.static(path.join(__dirname, 'dist/gameshop')));
+
+// Catch-all route to serve index.html for Angular routing
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, 'dist/gameshop/index.html'));
+});
+
+
 // --- CORS ---
 app.use(cors({
   origin: 'http://localhost:4200',
@@ -288,6 +297,35 @@ app.get("/api/games/:id", async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+
+
+
+// ================== GET TOP 5 BEST-SELLING GAMES ==================
+app.get('/api/games/top', async (req, res) => {
+  try {
+    const topGames = await query(`
+      SELECT 
+        g.id,
+        g.title,
+        g.image,
+        g.category,
+        g.price,
+        COUNT(t.id) AS total_sales
+      FROM transactions t
+      JOIN games g ON t.game_id = g.id
+      WHERE t.type = 'purchase'
+      GROUP BY g.id
+      ORDER BY total_sales DESC
+      LIMIT 5
+    `);
+
+    res.json({ topGames });
+  } catch (err) {
+    console.error('Failed to fetch top games:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 
 
 // ซื้อเกม
