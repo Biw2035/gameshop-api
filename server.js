@@ -17,7 +17,7 @@ const app = express();
 app.use(express.static(path.join(__dirname, 'dist/gameshop')));
 
 // Catch-all route to serve index.html for Angular routing
-app.get('*', (req, res) => {
+app.get(/.*/, (req, res) => {
   res.sendFile(path.join(__dirname, 'dist/gameshop/index.html'));
 });
 
