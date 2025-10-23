@@ -403,6 +403,27 @@ app.get('/api/mygames', authenticateToken, async (req, res) => {
 });
 
 
+// GET /api/top-games
+app.get('/api/top-games', async (req, res) => {
+  try {
+    // นับจำนวน transaction ต่อเกม
+    const topGames = await query(`
+      SELECT g.*, COUNT(t.game_id) AS sold_count
+      FROM games g
+      JOIN transactions t ON g.id = t.game_id
+      GROUP BY g.id
+      ORDER BY sold_count DESC
+      LIMIT 5
+    `);
+
+    res.json(topGames);
+  } catch (err) {
+    console.error('Failed to fetch top games:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+
 function isAdmin(req, res, next) {
   if (req.user.role !== 'admin') return res.status(403).json({ error: 'Access denied' });
   next();
