@@ -18,14 +18,18 @@ app.use(cors());
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
+const { Router } = require('express');
+const router = Router();
+
 // Serve Angular build
 app.use(express.static(path.join(__dirname, 'dist', 'gameshop')));
 
 // Catch-all สำหรับ Angular routing
-app.get('*', (req, res) => {
+router.get('/*', (req, res) => {
   res.sendFile(path.join(__dirname, 'dist', 'gameshop', 'index.html'));
 });
 
+app.use(router);
 // --- Example: simple API route ---
 app.get('/api/hello', (req, res) => {
   res.json({ message: 'Hello from backend!' });
