@@ -591,26 +591,33 @@ app.get('/api/codes/:code', authenticateToken, async (req, res) => {
 });
 
 
-//showcode for user
+// ✅ โค้ดส่วนลดที่ user คนนี้ยังไม่เคยใช้ และยังไม่หมดอายุ
 app.get('/api/available-codes', authenticateToken, async (req, res) => {
+  const userId = req.user.id;
+
   try {
     const today = new Date();
 
     const codes = await query(
-      `SELECT code, value, expires_at, max_uses, used_count 
-       FROM codes 
-       WHERE type = 'discount'
-       AND (expires_at IS NULL OR expires_at > ?)
-       AND (used_count < max_uses OR max_uses IS NULL)`,
-      [today]
+      `SELECT c.id, c.code, c.value, c.expires_at, c.max_uses, c.used_count
+       FROM codes c
+       WHERE c.type = 'discount'
+         AND (c.expires_at IS NULL OR c.expires_at > ?)
+         AND (c.max_uses IS NULL OR c.used_count < c.max_uses)
+         AND c.id NOT IN (
+            SELECT code_id FROM used_codes WHERE user_id = ?
+         )
+       ORDER BY c.expires_at ASC`,
+      [today, userId]
     );
 
     res.json(codes);
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'เกิดข้อผิดพลาดในการดึงข้อมูลโค้ด' });
+    console.error('Error fetching available codes:', err);
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดในการดึงโค้ดส่วนลด' });
   }
 });
+
 
 
 // --- Root ---
