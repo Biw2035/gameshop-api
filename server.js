@@ -300,52 +300,69 @@ app.get("/api/games/:id", async (req, res) => {
 
 // ซื้อเกม
 app.post('/api/checkout', authenticateToken, async (req, res) => {
-  const cartItems = req.body.cartItems;
-  const discountCode = req.body.discountCode || null; // รับโค้ดลดราคา
+  const { cartItems, discountCode } = req.body;
   const userId = req.user.id;
 
   try {
-    // 1. ดึงข้อมูล user
+    // ดึงข้อมูล user
     const users = await query('SELECT * FROM users WHERE id = ?', [userId]);
-    if (users.length === 0) return res.status(404).json({ error: 'User not found' });
+    if (!users.length) return res.status(404).json({ error: 'User not found' });
     const user = users[0];
     let walletBalance = parseFloat(user.wallet_balance);
 
-    // 2. คำนวณยอดรวม
+    // คำนวณยอดรวม
     let totalPrice = cartItems.reduce((sum, g) => sum + parseFloat(g.price), 0);
 
-    // 3. ตรวจสอบโค้ดลดราคา
+    let discountApplied = 0;
     if (discountCode) {
       const codes = await query('SELECT * FROM codes WHERE code = ? AND type = "discount"', [discountCode]);
-      if (codes.length === 0) return res.status(400).json({ error: 'โค้ดไม่ถูกต้อง' });
+      if (!codes.length) return res.status(400).json({ error: 'โค้ดไม่ถูกต้อง' });
 
       const code = codes[0];
-      totalPrice -= parseFloat(code.value);
+
+      // ตรวจสอบวันหมดอายุ
+      if (code.expires_at && new Date(code.expires_at) < new Date())
+        return res.status(400).json({ error: 'โค้ดหมดอายุแล้ว' });
+
+      // ตรวจสอบจำนวนครั้งใช้งาน
+      if (code.max_uses && code.used_count >= code.max_uses)
+        return res.status(400).json({ error: 'โค้ดถูกใช้ครบจำนวนแล้ว' });
+
+      discountApplied = parseFloat(code.value);
+      totalPrice -= discountApplied;
       if (totalPrice < 0) totalPrice = 0;
     }
 
-    // 4. ตรวจสอบยอดเงินเพียงพอ
+    // ตรวจสอบยอดเงิน
     if (walletBalance < totalPrice) return res.status(400).json({ error: 'ยอดเงินไม่พอ' });
 
-    // 5. หักเงิน
+    // หักเงิน
     walletBalance -= totalPrice;
     await query('UPDATE users SET wallet_balance = ? WHERE id = ?', [walletBalance, userId]);
 
-    // 6. บันทึกเกมและ transactions
+    // บันทึกเกมและ transactions
     for (const game of cartItems) {
       await query('INSERT IGNORE INTO user_games(user_id, game_id) VALUES (?, ?)', [userId, game.id]);
       await query('INSERT INTO transactions(user_id, type, amount, game_id) VALUES (?, "purchase", ?, ?)',
                   [userId, game.price, game.id]);
     }
 
-    // 7. ดึงข้อมูล user ใหม่
+    // อัปเดต used_count ของโค้ดหลังชำระเงิน
+    if (discountCode && discountApplied > 0) {
+      await query('UPDATE codes SET used_count = used_count + 1 WHERE code = ?', [discountCode]);
+    }
+
+    // ดึงข้อมูล user ใหม่
     const updatedUserRows = await query(
       'SELECT id, username, email, role, wallet_balance, profile_image FROM users WHERE id = ?',
       [userId]
     );
-    const updatedUser = updatedUserRows[0];
 
-    res.json({ message: 'ซื้อเกมทั้งหมดสำเร็จ', walletBalance, updatedUser });
+    res.json({
+      message: 'ซื้อเกมทั้งหมดสำเร็จ',
+      discountApplied,
+      updatedUser: updatedUserRows[0]
+    });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: err.message });
@@ -520,8 +537,7 @@ app.delete('/api/admin/codes/:id', authenticateToken, async (req, res) => {
 
 // ================== GET DISCOUNT CODE ==================
 app.get('/api/codes/:code', authenticateToken, async (req, res) => {
-  const code = req.params.code; // <-- ใช้ params แทน body
-  const userId = req.user.id;
+  const code = req.params.code;
 
   try {
     const rows = await query(
@@ -544,9 +560,7 @@ app.get('/api/codes/:code', authenticateToken, async (req, res) => {
       return res.status(400).json({ error: 'โค้ดถูกใช้ครบจำนวนแล้ว' });
     }
 
-    // อัปเดตจำนวนครั้งใช้งาน
-    await query('UPDATE codes SET used_count = used_count + 1 WHERE id = ?', [discount.id]);
-
+    // ไม่อัปเดต used_count ที่นี่
     res.json({ message: 'โค้ดใช้ได้', value: discount.value });
   } catch (err) {
     console.error(err);
