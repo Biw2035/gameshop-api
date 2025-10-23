@@ -315,23 +315,28 @@ app.post('/api/checkout', authenticateToken, async (req, res) => {
 
     let discountApplied = 0;
     if (discountCode) {
-      const codes = await query('SELECT * FROM codes WHERE code = ? AND type = "discount"', [discountCode]);
-      if (!codes.length) return res.status(400).json({ error: 'โค้ดไม่ถูกต้อง' });
+  const codes = await query('SELECT * FROM codes WHERE code = ? AND type = "discount"', [discountCode]);
+  if (!codes.length) return res.status(400).json({ error: 'โค้ดไม่ถูกต้อง' });
 
-      const code = codes[0];
+  const code = codes[0];
 
-      // ตรวจสอบวันหมดอายุ
-      if (code.expires_at && new Date(code.expires_at) < new Date())
-        return res.status(400).json({ error: 'โค้ดหมดอายุแล้ว' });
+  // ตรวจสอบวันหมดอายุ
+  if (code.expires_at && new Date(code.expires_at) < new Date())
+    return res.status(400).json({ error: 'โค้ดหมดอายุแล้ว' });
 
-      // ตรวจสอบจำนวนครั้งใช้งาน
-      if (code.max_uses && code.used_count >= code.max_uses)
-        return res.status(400).json({ error: 'โค้ดถูกใช้ครบจำนวนแล้ว' });
+  // ตรวจสอบจำนวนครั้งใช้งาน
+  if (code.max_uses && code.used_count >= code.max_uses)
+    return res.status(400).json({ error: 'โค้ดถูกใช้ครบจำนวนแล้ว' });
 
-      discountApplied = parseFloat(code.value);
-      totalPrice -= discountApplied;
-      if (totalPrice < 0) totalPrice = 0;
-    }
+  // ตรวจสอบว่า user ใช้โค้ดนี้แล้วหรือยัง
+  const used = await query('SELECT * FROM used_codes WHERE user_id = ? AND code_id = ?', [userId, code.id]);
+  if (used.length > 0)
+    return res.status(400).json({ error: 'คุณใช้โค้ดนี้แล้ว' });
+
+  discountApplied = parseFloat(code.value);
+  totalPrice -= discountApplied;
+  if (totalPrice < 0) totalPrice = 0;
+}
 
     // ตรวจสอบยอดเงิน
     if (walletBalance < totalPrice) return res.status(400).json({ error: 'ยอดเงินไม่พอ' });
@@ -349,8 +354,9 @@ app.post('/api/checkout', authenticateToken, async (req, res) => {
 
     // อัปเดต used_count ของโค้ดหลังชำระเงิน
     if (discountCode && discountApplied > 0) {
-      await query('UPDATE codes SET used_count = used_count + 1 WHERE code = ?', [discountCode]);
-    }
+  await query('UPDATE codes SET used_count = used_count + 1 WHERE code = ?', [discountCode]);
+  await query('INSERT INTO used_codes(user_id, code_id) VALUES (?, ?)', [userId, codes[0].id]);
+}
 
     // ดึงข้อมูล user ใหม่
     const updatedUserRows = await query(
