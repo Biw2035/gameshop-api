@@ -18,11 +18,11 @@ app.use(cors());
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
-// --- Example: Serve Angular frontend ---
+// Serve Angular build
 app.use(express.static(path.join(__dirname, 'dist', 'gameshop')));
 
-// Catch-all route สำหรับ Angular routing
-app.get('/:catchAll(.*)', (req, res) => {
+// Catch-all สำหรับ Angular routing
+app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'dist', 'gameshop', 'index.html'));
 });
 
