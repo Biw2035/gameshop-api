@@ -13,25 +13,24 @@ const { join } = require('path');
 const app = express();
 
 // --- Middleware ---
-app.use(cors());
+app.use(cors({
+  origin: 'https://gameshop.onrender.com' // frontend URL
+}));
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
 const { Router } = require('express');
 const router = Router();
 
-// ✅ Serve Angular frontend
-app.use(express.static(path.join(__dirname, "public")));
+app.use('/api', router);
 
-// ✅ ถ้าไม่พบเส้นทาง API ใด ๆ ให้ส่ง index.html กลับ (รองรับ Angular routes)
-app.get(/.*/, (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
-});
-app.use(router);
-// --- Example: simple API route ---
-app.get('/api/hello', (req, res) => {
+// --- API routes ต้องอยู่ก่อน serve frontend ---
+router.get('/hello', (req, res) => {
   res.json({ message: 'Hello from backend!' });
 });
+
+
+
 
 app.use(cors({
   origin: 'https://gameshop.onrender.com'
@@ -620,7 +619,11 @@ app.get('/api/available-codes', authenticateToken, async (req, res) => {
   }
 });
 
-
+// --- Serve Angular frontend ---
+app.use(express.static(path.join(__dirname, "public")));
+app.get(/.*/, (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
 
 // --- Root ---
 app.get('/', (req, res) => res.send('🎮 Gameshop API is running!'));
