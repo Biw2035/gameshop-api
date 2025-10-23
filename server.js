@@ -24,8 +24,8 @@ const router = Router();
 app.use(express.static(path.join(__dirname, "public")));
 
 // ✅ ถ้าไม่พบเส้นทาง API ใด ๆ ให้ส่ง index.html กลับ (รองรับ Angular routes)
-app.get("*", (req, res) => {
-  res.sendFile(path.join(__dirname, "public", "index.html"));
+app.get(/.*/, (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 app.use(router);
 // --- Example: simple API route ---
