@@ -353,11 +353,15 @@ app.post('/api/checkout', authenticateToken, async (req, res) => {
     }
 
     // อัปเดต used_count ของโค้ดหลังชำระเงิน
-    if (discountCode && discountApplied > 0) {
-  await query('UPDATE codes SET used_count = used_count + 1 WHERE code = ?', [discountCode]);
-  await query('INSERT INTO used_codes(user_id, code_id) VALUES (?, ?)', [userId, codes[0].id]);
+if (discountCode && discountApplied > 0) {
+  try {
+    await query('UPDATE codes SET used_count = used_count + 1 WHERE code = ?', [discountCode]);
+    await query('INSERT INTO used_codes(user_id, code_id) VALUES (?, ?)', [userId, codes[0].id]);
+  } catch (err) {
+    console.error('Error updating discount code:', err);
+    // ไม่ throw error ต่อ เพราะเราไม่อยาก rollback payment/game
+  }
 }
-
     // ดึงข้อมูล user ใหม่
     const updatedUserRows = await query(
       'SELECT id, username, email, role, wallet_balance, profile_image FROM users WHERE id = ?',
