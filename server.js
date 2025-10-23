@@ -1,13 +1,13 @@
 require('dotenv').config(); // ต้องอยู่บนสุด
 const cloudinary = require('cloudinary').v2;
-
+import path from "path"; 
 const express = require("express");
 const mysql = require("mysql2");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const bodyParser = require("body-parser");
 const cors = require("cors");
-
+const path = require("path");
 const multer = require("multer");
 const { CloudinaryStorage } = require('multer-storage-cloudinary');
 
