@@ -9,8 +9,7 @@ const bodyParser = require("body-parser");
 const cors = require("cors");
 const multer = require("multer");
 const { CloudinaryStorage } = require('multer-storage-cloudinary');
-
-
+const { join } = require('path');
 const app = express();
 
 // --- Middleware ---
@@ -22,11 +21,11 @@ const { Router } = require('express');
 const router = Router();
 
 // Serve Angular build
-app.use(express.static(path.join(__dirname, 'dist', 'gameshop')));
+app.use(express.static(join(__dirname, 'dist/gameshop')));
 
-// Catch-all route สำหรับ Angular routing
-app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, 'dist', 'gameshop', 'index.html'));
+// Catch-all สำหรับ Angular routing
+app.use((req, res) => {
+  res.sendFile(join(__dirname, 'dist/gameshop/index.html'));
 });
 app.use(router);
 // --- Example: simple API route ---
