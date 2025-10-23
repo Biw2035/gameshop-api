@@ -547,12 +547,13 @@ app.delete('/api/admin/codes/:id', authenticateToken, async (req, res) => {
 
 // ================== GET DISCOUNT CODE ==================
 app.get('/api/codes/:code', authenticateToken, async (req, res) => {
-  const code = req.params.code;
+  const codeParam = req.params.code;
+  const userId = req.user.id;
 
   try {
     const rows = await query(
       'SELECT * FROM codes WHERE code = ? AND type = "discount"',
-      [code]
+      [codeParam]
     );
 
     if (rows.length === 0) return res.status(404).json({ error: 'โค้ดไม่ถูกต้อง' });
@@ -570,13 +571,25 @@ app.get('/api/codes/:code', authenticateToken, async (req, res) => {
       return res.status(400).json({ error: 'โค้ดถูกใช้ครบจำนวนแล้ว' });
     }
 
-    // ไม่อัปเดต used_count ที่นี่
-    res.json({ message: 'โค้ดใช้ได้', value: discount.value });
+    // ตรวจสอบว่า user คนนี้ใช้โค้ดไปแล้วหรือยัง
+    const used = await query(
+      'SELECT * FROM used_codes WHERE user_id = ? AND code_id = ?',
+      [userId, discount.id]
+    );
+    const usedByCurrentUser = used.length > 0;
+
+    res.json({
+      message: 'โค้ดใช้ได้',
+      value: discount.value,
+      usedByCurrentUser,  // flag นี้ frontend จะใช้ตรวจสอบ
+    });
+
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: err.message });
   }
 });
+
 
 
 // --- Root ---
