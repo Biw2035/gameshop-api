@@ -20,18 +20,22 @@ app.use(bodyParser.urlencoded({ extended: true }));
 const { Router } = require('express');
 const router = Router();
 
-// Serve Angular build
-app.use(express.static(join(__dirname, 'dist/gameshop')));
+// ✅ Serve Angular frontend
+app.use(express.static(path.join(__dirname, "public")));
 
-// Catch-all สำหรับ Angular routing
-app.use((req, res) => {
-  res.sendFile(join(__dirname, 'dist/gameshop/index.html'));
+// ✅ ถ้าไม่พบเส้นทาง API ใด ๆ ให้ส่ง index.html กลับ (รองรับ Angular routes)
+app.get("*", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "index.html"));
 });
 app.use(router);
 // --- Example: simple API route ---
 app.get('/api/hello', (req, res) => {
   res.json({ message: 'Hello from backend!' });
 });
+
+app.use(cors({
+  origin: 'https://gameshop.onrender.com'
+}));
 
 const SECRET_KEY = process.env.SECRET_KEY;
 const PORT = process.env.PORT || 3000;
