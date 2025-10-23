@@ -591,6 +591,27 @@ app.get('/api/codes/:code', authenticateToken, async (req, res) => {
 });
 
 
+//showcode for user
+app.get('/api/available-codes', authenticateToken, async (req, res) => {
+  try {
+    const today = new Date();
+
+    const codes = await query(
+      `SELECT code, value, expires_at, max_uses, used_count 
+       FROM codes 
+       WHERE type = 'discount'
+       AND (expires_at IS NULL OR expires_at > ?)
+       AND (used_count < max_uses OR max_uses IS NULL)`,
+      [today]
+    );
+
+    res.json(codes);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดในการดึงข้อมูลโค้ด' });
+  }
+});
+
 
 // --- Root ---
 app.get('/', (req, res) => res.send('🎮 Gameshop API is running!'));
