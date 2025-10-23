@@ -591,29 +591,26 @@ app.get('/api/codes/:code', authenticateToken, async (req, res) => {
 });
 
 
-// ✅ โค้ดส่วนลดที่ user คนนี้ยังไม่เคยใช้ และยังไม่หมดอายุ
+// ✅ ดึงโค้ดส่วนลดที่ยังไม่หมดอายุ และยังไม่ถูกใช้โดย user
 app.get('/api/available-codes', authenticateToken, async (req, res) => {
   const userId = req.user.id;
 
   try {
-    const today = new Date();
-
-    const codes = await query(
-      `SELECT c.id, c.code, c.value, c.expires_at, c.max_uses, c.used_count
-       FROM codes c
-       WHERE c.type = 'discount'
-         AND (c.expires_at IS NULL OR c.expires_at > ?)
-         AND (c.max_uses IS NULL OR c.used_count < c.max_uses)
-         AND c.id NOT IN (
-            SELECT code_id FROM used_codes WHERE user_id = ?
-         )
-       ORDER BY c.expires_at ASC`,
-      [today, userId]
-    );
+    const codes = await query(`
+      SELECT c.id, c.code, c.value, c.expires_at
+      FROM codes c
+      WHERE c.type = "discount"
+        AND (c.expires_at IS NULL OR c.expires_at > NOW())
+        AND (c.max_uses IS NULL OR c.used_count < c.max_uses)
+        AND c.id NOT IN (
+          SELECT code_id FROM used_codes WHERE user_id = ?
+        )
+      ORDER BY c.id DESC
+    `, [userId]);
 
     res.json(codes);
   } catch (err) {
-    console.error('Error fetching available codes:', err);
+    console.error('Error fetching codes:', err);
     res.status(500).json({ error: 'เกิดข้อผิดพลาดในการดึงโค้ดส่วนลด' });
   }
 });
