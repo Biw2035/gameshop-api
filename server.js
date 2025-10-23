@@ -25,7 +25,7 @@ const router = Router();
 app.use(express.static(path.join(__dirname, 'dist', 'gameshop')));
 
 // Catch-all สำหรับ Angular routing
-router.get('/*', (req, res) => {
+app.use((req, res) => {
   res.sendFile(path.join(__dirname, 'dist', 'gameshop', 'index.html'));
 });
 
