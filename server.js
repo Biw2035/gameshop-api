@@ -434,8 +434,8 @@ app.get('/api/mygames', authenticateToken, async (req, res) => {
 });
 
 
-// GET /api/top-games
-app.get('/games/top-games', async (req, res) => {
+//top-games
+app.get('api/games/top-games', async (req, res) => {
   try {
     // นับจำนวน transaction ต่อเกม
     const topGames = await query(`
