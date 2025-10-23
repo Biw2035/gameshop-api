@@ -476,12 +476,31 @@ app.get('/api/admin/codes', authenticateToken, async (req, res) => {
 app.post('/api/admin/codes', authenticateToken, async (req, res) => {
   if (req.user.role !== 'admin') return res.status(403).json({ error: 'Access denied' });
 
-  const { code, type, value } = req.body;
+  const { code, type, value, max_uses, expires_at } = req.body;
 
   try {
-    await query('INSERT INTO codes (code, type, value) VALUES (?, ?, ?)', 
-      [code, type, value]);
+    await query(
+      'INSERT INTO codes (code, type, value, max_uses, expires_at) VALUES (?, ?, ?, ?, ?)', 
+      [code, type, value, max_uses || 1, expires_at || null]
+    );
     res.json({ message: 'สร้างโค้ดสำเร็จ' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.put('/api/admin/codes/:id', authenticateToken, async (req, res) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Access denied' });
+
+  const { code, type, value, max_uses, expires_at } = req.body;
+  const { id } = req.params;
+
+  try {
+    await query(
+      'UPDATE codes SET code = ?, type = ?, value = ?, max_uses = ?, expires_at = ? WHERE id = ?',
+      [code, type, value, max_uses || 1, expires_at || null, id]
+    );
+    res.json({ message: 'แก้ไขโค้ดสำเร็จ' });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -500,8 +519,9 @@ app.delete('/api/admin/codes/:id', authenticateToken, async (req, res) => {
 });
 
 // ================== GET DISCOUNT CODE ==================
-app.get('/api/codes/:code', async (req, res) => {
-  const code = req.params.code;
+app.get('/api/codes/:code', authenticateToken, async (req, res) => {
+  const code = req.params.code; // <-- ใช้ params แทน body
+  const userId = req.user.id;
 
   try {
     const rows = await query(
@@ -509,12 +529,27 @@ app.get('/api/codes/:code', async (req, res) => {
       [code]
     );
 
-    if (rows.length === 0) {
-      return res.status(404).json({ error: 'โค้ดไม่ถูกต้อง' });
+    if (rows.length === 0) return res.status(404).json({ error: 'โค้ดไม่ถูกต้อง' });
+
+    const discount = rows[0];
+
+    // ตรวจสอบวันหมดอายุ
+    const today = new Date();
+    if (discount.expires_at && new Date(discount.expires_at) < today) {
+      return res.status(400).json({ error: 'โค้ดหมดอายุแล้ว' });
     }
 
-    res.json(rows[0]); // ส่งกลับ object ของโค้ด
+    // ตรวจสอบจำนวนครั้งใช้งาน
+    if (discount.max_uses && discount.used_count >= discount.max_uses) {
+      return res.status(400).json({ error: 'โค้ดถูกใช้ครบจำนวนแล้ว' });
+    }
+
+    // อัปเดตจำนวนครั้งใช้งาน
+    await query('UPDATE codes SET used_count = used_count + 1 WHERE id = ?', [discount.id]);
+
+    res.json({ message: 'โค้ดใช้ได้', value: discount.value });
   } catch (err) {
+    console.error(err);
     res.status(500).json({ error: err.message });
   }
 });
