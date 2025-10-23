@@ -309,36 +309,36 @@ app.post('/api/checkout', authenticateToken, async (req, res) => {
     const user = users[0];
     let walletBalance = parseFloat(user.wallet_balance);
 
-    // คำนวณยอดรวม
-    let totalPrice = cartItems.reduce((sum, g) => sum + parseFloat(g.price), 0);
-    let discountApplied = 0;
-    let codeId = null;
+   // คำนวณยอดรวม
+let totalPrice = cartItems.reduce((sum, g) => sum + parseFloat(g.price), 0);
+let discountApplied = 0;
+let codeId = null;
 
-    // ตรวจสอบโค้ดส่วนลด
-    if (discountCode) {
-      const codes = await query('SELECT * FROM codes WHERE code = ? AND type = "discount"', [discountCode]);
-      if (!codes.length) return res.status(400).json({ error: 'โค้ดไม่ถูกต้อง' });
+// ตรวจสอบโค้ดส่วนลด
+if (discountCode) {
+  const codes = await query('SELECT * FROM codes WHERE code = ? AND type = "discount"', [discountCode]);
+  if (!codes.length) return res.status(400).json({ error: 'โค้ดไม่ถูกต้อง' });
 
-      const code = codes[0];
-      codeId = code.id;
+  const code = codes[0];
+  codeId = code.id;
 
-      // ตรวจสอบวันหมดอายุ
-      if (code.expires_at && new Date(code.expires_at) < new Date())
-        return res.status(400).json({ error: 'โค้ดหมดอายุแล้ว' });
+  // ตรวจสอบวันหมดอายุ
+  if (code.expires_at && new Date(code.expires_at) < new Date())
+    return res.status(400).json({ error: 'โค้ดหมดอายุแล้ว' });
 
-      // ตรวจสอบจำนวนครั้งใช้งาน
-      if (code.max_uses && code.used_count >= code.max_uses)
-        return res.status(400).json({ error: 'โค้ดถูกใช้ครบจำนวนแล้ว' });
+  // ตรวจสอบจำนวนครั้งใช้งาน
+  if (code.max_uses && code.used_count >= code.max_uses)
+    return res.status(400).json({ error: 'โค้ดถูกใช้ครบจำนวนแล้ว' });
 
-      // ตรวจสอบว่า user ใช้โค้ดนี้แล้วหรือยัง
-      const used = await query('SELECT * FROM used_codes WHERE user_id = ? AND code_id = ?', [userId, code.id]);
-      if (used.length > 0)
-        return res.status(400).json({ error: 'คุณใช้โค้ดนี้แล้ว' });
+  // ตรวจสอบว่า user ใช้โค้ดนี้แล้วหรือยัง
+  const used = await query('SELECT * FROM used_codes WHERE user_id = ? AND code_id = ?', [userId, code.id]);
+  if (used.length > 0)
+    return res.status(400).json({ error: 'คุณใช้โค้ดนี้แล้ว' });
 
-      discountApplied = parseFloat(code.value);
-      totalPrice -= discountApplied;
-      if (totalPrice < 0) totalPrice = 0;
-    }
+  // ✅ ป้องกันส่วนลดมากกว่ายอดรวม
+  discountApplied = Math.min(parseFloat(code.value), totalPrice);
+  totalPrice -= discountApplied;
+}
 
     // ตรวจสอบยอดเงิน
     if (walletBalance < totalPrice) return res.status(400).json({ error: 'ยอดเงินไม่พอ' });
