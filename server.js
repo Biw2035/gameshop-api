@@ -13,21 +13,23 @@ const { CloudinaryStorage } = require('multer-storage-cloudinary');
 
 const app = express();
 
-// Serve Angular build
+// --- Middleware ---
+app.use(cors());
+app.use(bodyParser.json());
+app.use(bodyParser.urlencoded({ extended: true }));
+
+// --- Example: Serve Angular frontend ---
 app.use(express.static(path.join(__dirname, 'dist', 'gameshop')));
 
 // Catch-all route สำหรับ Angular routing
-app.get('*', (req, res) => {
+app.get('/:catchAll(.*)', (req, res) => {
   res.sendFile(path.join(__dirname, 'dist', 'gameshop', 'index.html'));
 });
 
-// --- CORS ---
-app.use(cors({
-  origin: 'http://localhost:4200',
-  credentials: true
-}));
-app.use(bodyParser.json());
-app.use(bodyParser.urlencoded({ extended: true }));
+// --- Example: simple API route ---
+app.get('/api/hello', (req, res) => {
+  res.json({ message: 'Hello from backend!' });
+});
 
 const SECRET_KEY = process.env.SECRET_KEY;
 const PORT = process.env.PORT || 3000;
@@ -73,10 +75,7 @@ const pool = mysql.createPool({
 });
 
 const query = (sql, params) => new Promise((resolve, reject) => {
-  pool.query(sql, params, (err, results) => {
-    if(err) reject(err);
-    else resolve(results);
-  });
+  pool.query(sql, params, (err, results) => err ? reject(err) : resolve(results));
 });
 
 // --- JWT Middleware ---
