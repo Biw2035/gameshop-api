@@ -22,11 +22,11 @@ const { Router } = require('express');
 const router = Router();
 
 // Serve Angular build
-app.use(express.static(path.join(__dirname, 'dist', 'gameshop')));
+app.use(express.static(path.join(__dirname, 'dist/gameshop/browser')));
 
 // Catch-all สำหรับ Angular routing
-app.use((req, res) => {
-  res.sendFile(path.join(__dirname, 'dist', 'gameshop', 'index.html'));
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, 'dist/gameshop/browser', 'index.html'));
 });
 
 app.use(router);
