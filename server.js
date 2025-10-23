@@ -297,7 +297,6 @@ app.get("/api/games/:id", async (req, res) => {
 });
 
 
-
 // ซื้อเกม
 app.post('/api/checkout', authenticateToken, async (req, res) => {
   const { cartItems, discountCode } = req.body;
@@ -312,31 +311,34 @@ app.post('/api/checkout', authenticateToken, async (req, res) => {
 
     // คำนวณยอดรวม
     let totalPrice = cartItems.reduce((sum, g) => sum + parseFloat(g.price), 0);
-
     let discountApplied = 0;
+    let codeId = null;
+
+    // ตรวจสอบโค้ดส่วนลด
     if (discountCode) {
-  const codes = await query('SELECT * FROM codes WHERE code = ? AND type = "discount"', [discountCode]);
-  if (!codes.length) return res.status(400).json({ error: 'โค้ดไม่ถูกต้อง' });
+      const codes = await query('SELECT * FROM codes WHERE code = ? AND type = "discount"', [discountCode]);
+      if (!codes.length) return res.status(400).json({ error: 'โค้ดไม่ถูกต้อง' });
 
-  const code = codes[0];
+      const code = codes[0];
+      codeId = code.id;
 
-  // ตรวจสอบวันหมดอายุ
-  if (code.expires_at && new Date(code.expires_at) < new Date())
-    return res.status(400).json({ error: 'โค้ดหมดอายุแล้ว' });
+      // ตรวจสอบวันหมดอายุ
+      if (code.expires_at && new Date(code.expires_at) < new Date())
+        return res.status(400).json({ error: 'โค้ดหมดอายุแล้ว' });
 
-  // ตรวจสอบจำนวนครั้งใช้งาน
-  if (code.max_uses && code.used_count >= code.max_uses)
-    return res.status(400).json({ error: 'โค้ดถูกใช้ครบจำนวนแล้ว' });
+      // ตรวจสอบจำนวนครั้งใช้งาน
+      if (code.max_uses && code.used_count >= code.max_uses)
+        return res.status(400).json({ error: 'โค้ดถูกใช้ครบจำนวนแล้ว' });
 
-  // ตรวจสอบว่า user ใช้โค้ดนี้แล้วหรือยัง
-  const used = await query('SELECT * FROM used_codes WHERE user_id = ? AND code_id = ?', [userId, code.id]);
-  if (used.length > 0)
-    return res.status(400).json({ error: 'คุณใช้โค้ดนี้แล้ว' });
+      // ตรวจสอบว่า user ใช้โค้ดนี้แล้วหรือยัง
+      const used = await query('SELECT * FROM used_codes WHERE user_id = ? AND code_id = ?', [userId, code.id]);
+      if (used.length > 0)
+        return res.status(400).json({ error: 'คุณใช้โค้ดนี้แล้ว' });
 
-  discountApplied = parseFloat(code.value);
-  totalPrice -= discountApplied;
-  if (totalPrice < 0) totalPrice = 0;
-}
+      discountApplied = parseFloat(code.value);
+      totalPrice -= discountApplied;
+      if (totalPrice < 0) totalPrice = 0;
+    }
 
     // ตรวจสอบยอดเงิน
     if (walletBalance < totalPrice) return res.status(400).json({ error: 'ยอดเงินไม่พอ' });
@@ -352,16 +354,12 @@ app.post('/api/checkout', authenticateToken, async (req, res) => {
                   [userId, game.price, game.id]);
     }
 
-    // อัปเดต used_count ของโค้ดหลังชำระเงิน
-if (discountCode && discountApplied > 0) {
-  try {
-    await query('UPDATE codes SET used_count = used_count + 1 WHERE code = ?', [discountCode]);
-    await query('INSERT INTO used_codes(user_id, code_id) VALUES (?, ?)', [userId, codes[0].id]);
-  } catch (err) {
-    console.error('Error updating discount code:', err);
-    // ไม่ throw error ต่อ เพราะเราไม่อยาก rollback payment/game
-  }
-}
+    // บันทึกโค้ดที่ใช้ (used_codes) และอัปเดต used_count
+    if (discountCode && discountApplied > 0 && codeId) {
+      await query('INSERT INTO used_codes(user_id, code_id) VALUES (?, ?)', [userId, codeId]);
+      await query('UPDATE codes SET used_count = used_count + 1 WHERE id = ?', [codeId]);
+    }
+
     // ดึงข้อมูล user ใหม่
     const updatedUserRows = await query(
       'SELECT id, username, email, role, wallet_balance, profile_image FROM users WHERE id = ?',
@@ -373,11 +371,13 @@ if (discountCode && discountApplied > 0) {
       discountApplied,
       updatedUser: updatedUserRows[0]
     });
+
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: err.message });
+    console.error('Checkout error:', err);
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดระหว่างชำระเงิน' });
   }
 });
+
 
 
 
