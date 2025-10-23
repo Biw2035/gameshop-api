@@ -13,14 +13,13 @@ const { CloudinaryStorage } = require('multer-storage-cloudinary');
 
 const app = express();
 
-// Serve Angular static files
-app.use(express.static(path.join(__dirname, 'dist/gameshop')));
+// Serve Angular build
+app.use(express.static(path.join(__dirname, 'dist', 'gameshop')));
 
-// Catch-all route to serve index.html for Angular routing
-app.get(/.*/, (req, res) => {
-  res.sendFile(path.join(__dirname, 'dist/gameshop/index.html'));
+// Catch-all route สำหรับ Angular routing
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, 'dist', 'gameshop', 'index.html'));
 });
-
 
 // --- CORS ---
 app.use(cors({
