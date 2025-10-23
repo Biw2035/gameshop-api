@@ -296,32 +296,7 @@ app.get("/api/games/:id", async (req, res) => {
   }
 });
 
-// ==================== TOP SELLING GAMES ====================
-app.get('/api/games/top', async (req, res) => {
-  try {
-    const topGames = await query(`
-      SELECT 
-        g.id,
-        g.title,
-        g.image,
-        g.category,
-        g.price,
-        COUNT(t.id) AS total_sales
-      FROM transactions t
-      JOIN games g ON t.game_id = g.id
-      WHERE t.type = 'purchase'
-      GROUP BY g.id
-      ORDER BY total_sales DESC
-      LIMIT 5
-    `);
 
-    // ส่ง array ของ top games
-    res.json(topGames);
-  } catch (err) {
-    console.error('Failed to fetch top games:', err);
-    res.status(500).json({ error: err.message });
-  }
-});
 
 
 
@@ -411,8 +386,6 @@ app.get('/api/profile/transactions', authenticateToken, async (req, res) => {
 
 
 // ดึงเกมทั้งหมดของผู้ใช้
-
-// ==================== MY GAMES ====================
 app.get('/api/mygames', authenticateToken, async (req, res) => {
   try {
     const userId = req.user.id;
@@ -425,9 +398,9 @@ app.get('/api/mygames', authenticateToken, async (req, res) => {
       ORDER BY g.id DESC
     `, [userId]);
 
-    res.json(games); // ส่ง array ตรงๆ
+    res.json({ games });
   } catch (err) {
-    console.error('Failed to fetch my games:', err);
+    console.error(err);
     res.status(500).json({ error: err.message });
   }
 });
