@@ -2,7 +2,7 @@ require('dotenv').config(); // ต้องอยู่บนสุด
 const cloudinary = require('cloudinary').v2;
 const path = require("path"); 
 const express = require("express");
-const mysql = require("mysql2");
+const mysql = require("mysql2/promise"); 
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const bodyParser = require("body-parser");
@@ -229,6 +229,26 @@ app.get("/api/games", async (req, res) => {
   }
 });
 
+//top-games
+app.get('/api/games/top-games', async (req, res) => {
+  try {
+    // นับจำนวน transaction ต่อเกม
+    const topGames = await query(`
+      SELECT g.*, COUNT(t.game_id) AS sold_count
+      FROM games g
+      JOIN transactions t ON g.id = t.game_id
+      GROUP BY g.id
+      ORDER BY sold_count DESC
+      LIMIT 5
+    `);
+
+    res.json(topGames);
+  } catch (err) {
+    console.error('Failed to fetch top games:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // --- Add Game ---
 app.post("/api/games", authenticateToken, uploadGame.single('image'), async (req, res) => {
   const { title, description, price, category } = req.body;
@@ -429,27 +449,6 @@ app.get('/api/mygames', authenticateToken, async (req, res) => {
     res.json({ games });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: err.message });
-  }
-});
-
-
-//top-games
-app.get('/api/games/top-games', async (req, res) => {
-  try {
-    // นับจำนวน transaction ต่อเกม
-    const topGames = await query(`
-      SELECT g.*, COUNT(t.game_id) AS sold_count
-      FROM games g
-      JOIN transactions t ON g.id = t.game_id
-      GROUP BY g.id
-      ORDER BY sold_count DESC
-      LIMIT 5
-    `);
-
-    res.json(topGames);
-  } catch (err) {
-    console.error('Failed to fetch top games:', err);
     res.status(500).json({ error: err.message });
   }
 });
