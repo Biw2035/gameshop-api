@@ -25,7 +25,7 @@ const router = Router();
 app.use('/api', router);
 
 // --- API routes ต้องอยู่ก่อน serve frontend ---
-router.get('/hello', (req, res) => {
+router.get('/api/hello', (req, res) => {
   res.json({ message: 'Hello from backend!' });
 });
 
@@ -435,7 +435,7 @@ app.get('/api/mygames', authenticateToken, async (req, res) => {
 
 
 //top-games
-app.get('api/games/top-games', async (req, res) => {
+app.get('/api/games/top-games', async (req, res) => {
   try {
     // นับจำนวน transaction ต่อเกม
     const topGames = await query(`
