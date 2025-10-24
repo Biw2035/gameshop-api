@@ -169,7 +169,7 @@ app.get("/api/profile", authenticateToken, async (req, res) => {
 });
 
 // --- Profile UPDATE ---
-app.put("/api/profile", authenticateToken, uploadProfile.single('profile_image'), async (req, res) => {
+app.put("/profile", authenticateToken, uploadProfile.single('profile_image'), async (req, res) => {
   const { username, email } = req.body;
   const profile_image = req.file ? req.file.path : null; // Cloudinary URL
 
